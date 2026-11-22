@@ -40,30 +40,18 @@ struct ProviderQuotaTimelineProvider: TimelineProvider {
 }
 
 struct ProviderQuotaWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: ProviderQuotaEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(entry.provider.displayName)
-                    .font(.headline)
-                Spacer()
-                if let planName = entry.snapshot?.planName {
-                    Text(planName)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            headerView
 
-            if let primary = entry.snapshot?.primaryWindow {
-                ProgressView(value: primary.usedPercentage, total: 100)
-                HStack {
-                    Text(primary.label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(Int(primary.usedPercentage.rounded()))%")
-                        .font(.caption.monospacedDigit())
+            if let snapshot = entry.snapshot {
+                if family == .systemSmall {
+                    smallBody(snapshot: snapshot)
+                } else {
+                    mediumBody(snapshot: snapshot)
                 }
             } else {
                 Spacer()
@@ -74,6 +62,129 @@ struct ProviderQuotaWidgetView: View {
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+
+    private var headerView: some View {
+        HStack(spacing: 4) {
+            Text(entry.provider.displayName)
+                .font(.headline)
+                .lineLimit(1)
+            Spacer()
+            if let planName = entry.snapshot?.planName {
+                Text(planName)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.quaternary, in: Capsule())
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func smallBody(snapshot: UsageSnapshot) -> some View {
+        if let primary = snapshot.primaryWindow {
+            Spacer(minLength: 0)
+            HStack(spacing: 10) {
+                Gauge(value: primary.usedPercentage, in: 0 ... 100) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text("\(Int(primary.usedPercentage.rounded()))%")
+                        .font(.caption.bold().monospacedDigit())
+                }
+                .gaugeStyle(.accessoryCircularCapacity)
+                .tint(progressColor(for: primary.usedPercentage))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(primary.label)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    if let resetAt = primary.resetAt, resetAt > entry.date {
+                        Text(resetAt, style: .relative)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if let secondary = snapshot.secondaryWindow {
+                        Text("\(secondary.label) \(Int(secondary.usedPercentage.rounded()))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        } else if let billingSummary = snapshot.billingSummary {
+            Spacer()
+            Text(billingSummary)
+                .font(.caption)
+            Spacer()
+        } else {
+            Spacer()
+            Text("暂无额度明细")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func mediumBody(snapshot: UsageSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let primary = snapshot.primaryWindow {
+                windowBar(primary)
+            }
+            if let secondary = snapshot.secondaryWindow {
+                windowBar(secondary)
+            }
+            if snapshot.primaryWindow == nil, snapshot.secondaryWindow == nil {
+                if let billingSummary = snapshot.billingSummary {
+                    Text(billingSummary)
+                        .font(.subheadline)
+                }
+            }
+        }
+        Spacer(minLength: 0)
+        HStack {
+            Text("更新于")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(snapshot.fetchedAt, style: .time)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func windowBar(_ window: QuotaWindow) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(window.label)
+                    .font(.caption.weight(.medium))
+                Spacer()
+                Text("\(Int(window.usedPercentage.rounded()))%")
+                    .font(.caption.bold().monospacedDigit())
+                    .foregroundStyle(progressColor(for: window.usedPercentage))
+                if let resetAt = window.resetAt, resetAt > entry.date {
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Text(resetAt, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ProgressView(value: window.usedPercentage, total: 100)
+                .tint(progressColor(for: window.usedPercentage))
+        }
+    }
+
+    private func progressColor(for usedPercentage: Double) -> Color {
+        if usedPercentage >= 95 {
+            return .red
+        }
+        if usedPercentage >= 80 {
+            return .orange
+        }
+        return .accentColor
     }
 }
 

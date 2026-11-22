@@ -42,7 +42,7 @@ final class AppModel {
         let widgetKinds = Self.widgetKinds
 
         let scheduler = UsageScheduler(
-            providers: [],
+            providers: [CodexProvider()],
             store: store,
             refreshInterval: settings.refreshInterval,
             alertSettings: settings.alertSettings,
@@ -185,23 +185,73 @@ private struct ProviderStatusRow: View {
     let runtimeState: ProviderRuntimeState?
 
     var body: some View {
-        HStack {
-            Text(provider.displayName)
-                .font(.subheadline.weight(.medium))
-            Spacer()
-            if let primary = runtimeState?.snapshot?.primaryWindow {
-                Text("\(Int(primary.usedPercentage.rounded()))%")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            } else if runtimeState?.lastErrorMessage != nil {
-                Text("拉取失败")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else {
-                Text("暂未同步")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(provider.displayName)
+                    .font(.subheadline.weight(.medium))
+                if let planName = runtimeState?.snapshot?.planName {
+                    Text(planName)
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                }
+                Spacer()
+                if runtimeState?.snapshot == nil {
+                    if runtimeState?.lastErrorMessage != nil {
+                        Text("拉取失败")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("暂未同步")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            if let snapshot = runtimeState?.snapshot {
+                if let primary = snapshot.primaryWindow {
+                    windowProgressRow(primary)
+                }
+                if let secondary = snapshot.secondaryWindow {
+                    windowProgressRow(secondary)
+                }
             }
         }
+    }
+
+    private func windowProgressRow(_ window: QuotaWindow) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(window.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(window.usedPercentage.rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(progressColor(for: window.usedPercentage))
+                if let resetAt = window.resetAt, resetAt > Date() {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Text(resetAt, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ProgressView(value: window.usedPercentage, total: 100)
+                .tint(progressColor(for: window.usedPercentage))
+        }
+    }
+
+    private func progressColor(for usedPercentage: Double) -> Color {
+        if usedPercentage >= 95 {
+            return .red
+        }
+        if usedPercentage >= 80 {
+            return .orange
+        }
+        return .accentColor
     }
 }
