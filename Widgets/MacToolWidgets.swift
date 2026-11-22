@@ -2,40 +2,47 @@ import MacToolCore
 import SwiftUI
 import WidgetKit
 
-/// 单个 Provider 的小组件时间线条目。只承载该服务的缓存快照。
+/// 单个 Provider 的小组件时间线条目。只承载该服务的缓存快照与展示样式。
 struct ProviderQuotaEntry: TimelineEntry {
     let date: Date
     let provider: ProviderID
     let snapshot: UsageSnapshot?
+    let style: WidgetDisplayStyle
 }
 
-/// 面向单个 Provider 的只读 TimelineProvider，仅从 App Group 缓存读取数据。
-struct ProviderQuotaTimelineProvider: TimelineProvider {
+/// 面向单个 Provider 的只读 TimelineProvider，仅从共享只读缓存读取数据。
+struct ProviderQuotaTimelineProvider: AppIntentTimelineProvider {
     let provider: ProviderID
     private let reader = ReadOnlySnapshotReader()
 
     func placeholder(in _: Context) -> ProviderQuotaEntry {
-        ProviderQuotaEntry(date: Date(), provider: provider, snapshot: nil)
+        ProviderQuotaEntry(date: Date(), provider: provider, snapshot: nil, style: .ring)
     }
 
-    func getSnapshot(in _: Context, completion: @escaping (ProviderQuotaEntry) -> Void) {
-        let entry = ProviderQuotaEntry(
+    func snapshot(
+        for configuration: ProviderWidgetStyleIntent,
+        in _: Context
+    ) async -> ProviderQuotaEntry {
+        ProviderQuotaEntry(
             date: Date(),
             provider: provider,
-            snapshot: reader.snapshot(for: provider)
+            snapshot: reader.snapshot(for: provider),
+            style: configuration.style
         )
-        completion(entry)
     }
 
-    func getTimeline(in _: Context, completion: @escaping (Timeline<ProviderQuotaEntry>) -> Void) {
+    func timeline(
+        for configuration: ProviderWidgetStyleIntent,
+        in _: Context
+    ) async -> Timeline<ProviderQuotaEntry> {
         let entry = ProviderQuotaEntry(
             date: Date(),
             provider: provider,
-            snapshot: reader.snapshot(for: provider)
+            snapshot: reader.snapshot(for: provider),
+            style: configuration.style
         )
         // 刷新由主应用通过 WidgetCenter 主动触发，避免系统频繁唤醒扩展。
-        let timeline = Timeline(entries: [entry], policy: .never)
-        completion(timeline)
+        return Timeline(entries: [entry], policy: .never)
     }
 }
 
@@ -44,147 +51,106 @@ struct ProviderQuotaWidgetView: View {
     let entry: ProviderQuotaEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            headerView
+        VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 10) {
+            WidgetHeaderBar(
+                provider: entry.provider,
+                planName: entry.snapshot?.planName
+            )
 
             if let snapshot = entry.snapshot {
-                if family == .systemSmall {
-                    smallBody(snapshot: snapshot)
-                } else {
-                    mediumBody(snapshot: snapshot)
-                }
+                contentBody(snapshot: snapshot)
             } else {
                 Spacer()
                 Text("等待主应用同步数据")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
     }
 
-    private var headerView: some View {
-        HStack(spacing: 4) {
-            Text(entry.provider.displayName)
-                .font(.headline)
-                .lineLimit(1)
-            Spacer()
-            if let planName = entry.snapshot?.planName {
-                Text(planName)
-                    .font(.caption2)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(.quaternary, in: Capsule())
-            }
-        }
-    }
-
     @ViewBuilder
-    private func smallBody(snapshot: UsageSnapshot) -> some View {
-        if let primary = snapshot.primaryWindow {
-            Spacer(minLength: 0)
-            HStack(spacing: 10) {
-                Gauge(value: primary.usedPercentage, in: 0 ... 100) {
-                    EmptyView()
-                } currentValueLabel: {
-                    Text("\(Int(primary.usedPercentage.rounded()))%")
-                        .font(.caption.bold().monospacedDigit())
-                }
-                .gaugeStyle(.accessoryCircularCapacity)
-                .tint(progressColor(for: primary.usedPercentage))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(primary.label)
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-                    if let resetAt = primary.resetAt, resetAt > entry.date {
-                        Text(resetAt, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    if let secondary = snapshot.secondaryWindow {
-                        Text("\(secondary.label) \(Int(secondary.usedPercentage.rounded()))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-        } else if let billingSummary = snapshot.billingSummary {
+    private func contentBody(snapshot: UsageSnapshot) -> some View {
+        let windows = [snapshot.primaryWindow, snapshot.secondaryWindow].compactMap { $0 }
+        if windows.isEmpty {
             Spacer()
-            Text(billingSummary)
-                .font(.caption)
-            Spacer()
-        } else {
-            Spacer()
-            Text("暂无额度明细")
+            Text(snapshot.billingSummary ?? "暂无额度明细")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+        } else if entry.style == .ring {
+            ringBody(windows: windows)
+        } else {
+            barBody(windows: windows)
         }
     }
 
     @ViewBuilder
-    private func mediumBody(snapshot: UsageSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let primary = snapshot.primaryWindow {
-                windowBar(primary)
-            }
-            if let secondary = snapshot.secondaryWindow {
-                windowBar(secondary)
-            }
-            if snapshot.primaryWindow == nil, snapshot.secondaryWindow == nil {
-                if let billingSummary = snapshot.billingSummary {
-                    Text(billingSummary)
-                        .font(.subheadline)
-                }
+    private func ringBody(windows: [QuotaWindow]) -> some View {
+        let isSmall = family == .systemSmall
+        Spacer(minLength: 0)
+        HStack(spacing: isSmall ? 10 : 18) {
+            ForEach(windows.prefix(2)) { window in
+                QuotaRingMetricView(
+                    title: shortWindowTitle(window),
+                    badge: nil,
+                    remainingPercentage: window.remainingPercentage,
+                    resetText: isSmall
+                        ? nil
+                        : WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                    ringSize: isSmall ? 50 : 64,
+                    lineWidth: isSmall ? 5.5 : 6.5
+                )
             }
         }
         Spacer(minLength: 0)
-        HStack {
-            Text("更新于")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            Text(snapshot.fetchedAt, style: .time)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
     }
 
-    private func windowBar(_ window: QuotaWindow) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(window.label)
-                    .font(.caption.weight(.medium))
-                Spacer()
-                Text("\(Int(window.usedPercentage.rounded()))%")
-                    .font(.caption.bold().monospacedDigit())
-                    .foregroundStyle(progressColor(for: window.usedPercentage))
-                if let resetAt = window.resetAt, resetAt > entry.date {
-                    Text("·")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Text(resetAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+    @ViewBuilder
+    private func barBody(windows: [QuotaWindow]) -> some View {
+        if family == .systemSmall {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(windows.prefix(2)) { window in
+                    CodexStyleBarMetricView(
+                        title: shortWindowTitle(window),
+                        remainingPercentage: window.remainingPercentage,
+                        resetText: WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                        compact: true
+                    )
                 }
             }
-            ProgressView(value: window.usedPercentage, total: 100)
-                .tint(progressColor(for: window.usedPercentage))
+            Spacer(minLength: 0)
+        } else {
+            Spacer(minLength: 0)
+            HStack(alignment: .top, spacing: 18) {
+                ForEach(windows.prefix(2)) { window in
+                    CodexStyleBarMetricView(
+                        title: shortWindowTitle(window),
+                        remainingPercentage: window.remainingPercentage,
+                        resetText: WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                        compact: false
+                    )
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 
-    private func progressColor(for usedPercentage: Double) -> Color {
-        if usedPercentage >= 95 {
-            return .red
+    private func shortWindowTitle(_ window: QuotaWindow) -> String {
+        switch window.id {
+        case "session_5h":
+            "5 小时"
+        case "weekly":
+            "周额度"
+        case "monthly_total":
+            "本月总计"
+        case "monthly_api":
+            "API 额度"
+        default:
+            window.label
         }
-        if usedPercentage >= 80 {
-            return .orange
-        }
-        return .accentColor
     }
 }
 
@@ -192,14 +158,15 @@ struct CodexQuotaWidget: Widget {
     let kind = "CodexQuotaWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(
+        AppIntentConfiguration(
             kind: kind,
+            intent: ProviderWidgetStyleIntent.self,
             provider: ProviderQuotaTimelineProvider(provider: .codex)
         ) { entry in
             ProviderQuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Codex 额度")
-        .description("显示 Codex 5 小时会话窗口与周额度使用情况。")
+        .description("显示 Codex 5 小时会话与周剩余额度，支持切换圆环或条形样式。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -208,14 +175,15 @@ struct CursorQuotaWidget: Widget {
     let kind = "CursorQuotaWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(
+        AppIntentConfiguration(
             kind: kind,
+            intent: ProviderWidgetStyleIntent.self,
             provider: ProviderQuotaTimelineProvider(provider: .cursor)
         ) { entry in
             ProviderQuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Cursor 额度")
-        .description("显示 Cursor 当前账单周期的请求与费用用量。")
+        .description("显示 Cursor 当前账单周期剩余额度，支持切换圆环或条形样式。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
