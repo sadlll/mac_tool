@@ -2,33 +2,25 @@
 
 本文件为 AI 编程助手（Codex、Antigravity、Cursor、Claude Code 等）和人类贡献者提供本仓库的协作约定。修改代码前请完整阅读。
 
-## 项目概述
+项目功能、架构图和隐私说明见 [README.md](./README.md)，这里不再重复。
 
-`mac_tool` 是一个 macOS 菜单栏常驻应用，通过 WidgetKit 桌面小组件展示 Codex、Antigravity（AGY）、Cursor 三个 AI 编程工具的 Coding Plan 额度使用情况。
+## 决策优先级
 
-核心目标按优先级排序：
+几个目标冲突时，按以下顺序取舍：
 
 1. **安全**：凭据只读、只在内存中使用、不落盘、不外传
 2. **低资源占用**：空闲时 CPU 接近 0%，常驻内存小于 50 MB
-3. **精简**：只支持上面三个服务，不追求覆盖所有服务
+3. **精简**：只支持 Codex、Antigravity、Cursor 三个服务，不接受新增其他服务的 PR
 4. **可维护**：Provider 之间相互隔离，核心逻辑可以单独测试
 
-## 技术栈
+## 技术约束
 
-| 项目 | 选型 |
-| --- | --- |
-| 语言 | Swift 5.10+（启用 Strict Concurrency） |
-| UI | SwiftUI（`MenuBarExtra`）、WidgetKit |
-| 最低系统 | macOS 14.0 |
-| 工程生成 | XcodeGen（`project.yml`） |
-| 核心逻辑 | 本地 SPM 包 `Packages/MacToolCore` |
-| 自动更新 | [Sparkle 2](https://sparkle-project.org/)（SPM 引入） |
-| 测试 | XCTest / Swift Testing |
-| 代码风格 | SwiftLint + SwiftFormat |
-| CI | GitHub Actions |
-| 第三方依赖 | 运行时**只允许 Sparkle 一个**，其余只用 Apple 系统框架 |
+- Swift 5.10+，启用 Strict Concurrency；最低支持 macOS 14.0，不要为了兼容更低版本写降级代码
+- 工程只由 `project.yml`（XcodeGen）定义，不要手动修改生成的 `.xcodeproj`
+- 运行时第三方依赖**只允许 Sparkle 2**，其余只用 Apple 系统框架
+- 测试用 XCTest / Swift Testing，格式和 Lint 以仓库内的 SwiftFormat / SwiftLint 配置为准
 
-## 目录结构
+## 代码放在哪里
 
 ```text
 project.yml                 # 唯一的工程定义来源
