@@ -1,0 +1,45 @@
+{
+  "userStatus": {
+    "name": "Example User",
+    "email": "user@example.com",
+    "planStatus": {
+      "planInfo": {
+        "planName": "Pro"
+      }
+    },
+    "cascadeModelConfigData": {
+      "clientModelConfigs": [
+        {
+          "label": "Model Alpha",
+          "modelOrAlias": {
+            "model": "MODEL_ALPHA_1"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.568,
+            "resetTime": "2026-11-23T08:00:00Z"
+          }
+        },
+        {
+          "label": "Model Beta",
+          "modelOrAlias": {
+            "model": "MODEL_BETA_1"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.92,
+            "resetTime": "2026-11-24T00:00:00Z"
+          }
+        },
+        {
+          "label": "Model Gamma",
+          "modelOrAlias": {
+            "model": "MODEL_GAMMA_1"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.15,
+            "resetTime": "2026-11-23T06:30:00Z"
+          }
+        }
+      ]
+    }
+  }
+}

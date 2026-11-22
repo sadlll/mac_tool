@@ -42,7 +42,7 @@ final class AppModel {
         let widgetKinds = Self.widgetKinds
 
         let scheduler = UsageScheduler(
-            providers: [CodexProvider(), CursorProvider()],
+            providers: [CodexProvider(), CursorProvider(), AntigravityProvider()],
             store: store,
             refreshInterval: settings.refreshInterval,
             alertSettings: settings.alertSettings,
@@ -211,11 +211,17 @@ private struct ProviderStatusRow: View {
             }
 
             if let snapshot = runtimeState?.snapshot {
-                if let primary = snapshot.primaryWindow {
-                    windowProgressRow(primary)
-                }
-                if let secondary = snapshot.secondaryWindow {
-                    windowProgressRow(secondary)
+                if !snapshot.modelQuotas.isEmpty {
+                    ForEach(snapshot.modelQuotas.prefix(4)) { modelQuota in
+                        modelQuotaRow(modelQuota)
+                    }
+                } else {
+                    if let primary = snapshot.primaryWindow {
+                        windowProgressRow(primary)
+                    }
+                    if let secondary = snapshot.secondaryWindow {
+                        windowProgressRow(secondary)
+                    }
                 }
             }
         }
@@ -242,6 +248,31 @@ private struct ProviderStatusRow: View {
             }
             ProgressView(value: window.usedPercentage, total: 100)
                 .tint(progressColor(for: window.usedPercentage))
+        }
+    }
+
+    private func modelQuotaRow(_ modelQuota: ModelQuota) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(modelQuota.modelName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                Text("剩 \(Int(modelQuota.remainingPercentage.rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(progressColor(for: modelQuota.usedPercentage))
+                if let resetAt = modelQuota.resetAt, resetAt > Date() {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Text(resetAt, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ProgressView(value: modelQuota.remainingPercentage, total: 100)
+                .tint(progressColor(for: modelQuota.usedPercentage))
         }
     }
 
