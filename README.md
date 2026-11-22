@@ -143,28 +143,7 @@ xcodegen generate          # 根据 project.yml 生成 mac_tool.xcodeproj
 open mac_tool.xcodeproj
 ```
 
-命令行构建和测试：
-
-```bash
-xcodebuild -project mac_tool.xcodeproj -scheme mac_tool -configuration Debug build
-swift test --package-path Packages/MacToolCore
-```
-
-## 项目结构（规划）
-
-```text
-mac_tool/
-├── project.yml                 # XcodeGen 工程定义（.xcodeproj 不提交）
-├── App/                        # 菜单栏主应用（SwiftUI MenuBarExtra）
-├── Widgets/                    # WidgetKit 扩展
-├── Packages/
-│   └── MacToolCore/            # Provider、模型、解析、缓存（SPM，可单测）
-├── Resources/                  # 资源与本地化
-├── Scripts/                    # 开发与发布脚本
-├── .github/workflows/          # CI：构建、测试、Lint
-├── AGENTS.md                   # AI 编程助手协作约定
-└── README.md
-```
+测试、Lint 等开发命令以及目录结构见 [AGENTS.md](./AGENTS.md)。
 
 ## 路线图
 
@@ -190,11 +169,7 @@ mac_tool/
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request。提交前请：
-
-1. 阅读 [AGENTS.md](./AGENTS.md)，了解代码规范和架构约束
-2. 确认 `swift test` 和 `swiftlint` 都通过
-3. Commit 信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)
+欢迎提交 Issue 和 Pull Request。代码规范、架构约束、测试和提交要求统一写在 [AGENTS.md](./AGENTS.md) 里，人类贡献者和 AI 编程助手都按它执行。
 
 ## 许可证
 
