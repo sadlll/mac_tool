@@ -1,17 +1,31 @@
+import Darwin
 import Foundation
 
-/// App Group 共享容器配置。
+/// App Group 与本地只读共享缓存目录配置。
 public enum AppGroupConfig {
-    /// 主应用与 Widget Extension 共享的 App Group 标识。
+    /// 主应用与 Widget Extension 共享的 App Group 标识（正式签名启用时优先使用）。
     public static let identifier = "group.com.sadlll.mac-tool"
     /// 快照缓存目录名称。
     public static let snapshotsDirectoryName = "Snapshots"
 
-    /// 返回共享容器中的快照目录 URL。
-    public static func snapshotsDirectoryURL(fileManager: FileManager = .default) -> URL? {
-        fileManager
-            .containerURL(forSecurityApplicationGroupIdentifier: identifier)?
+    /// 返回主应用与沙盒小组件共同访问的快照目录 URL：
+    /// `~/Library/Application Support/mac_tool/Snapshots`（沙盒小组件仅拥有只读权限）。
+    public static func snapshotsDirectoryURL() -> URL? {
+        guard let realHomeURL = realUserHomeDirectoryURL() else {
+            return nil
+        }
+        return realHomeURL
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("mac_tool", isDirectory: true)
             .appendingPathComponent(snapshotsDirectoryName, isDirectory: true)
+    }
+
+    private static func realUserHomeDirectoryURL() -> URL? {
+        guard let passwd = getpwuid(getuid()), let homeDir = passwd.pointee.pw_dir else {
+            return FileManager.default.homeDirectoryForCurrentUser
+        }
+        return URL(fileURLWithPath: String(cString: homeDir), isDirectory: true)
     }
 }
 

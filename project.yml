@@ -36,6 +36,8 @@ targets:
       path: App/Info.plist
     entitlements:
       path: App/mac_tool.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sadlll.mac-tool
@@ -60,6 +62,10 @@ targets:
       path: Widgets/Info.plist
     entitlements:
       path: Widgets/MacToolWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /Library/Application Support/mac_tool/
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sadlll.mac-tool.widgets
