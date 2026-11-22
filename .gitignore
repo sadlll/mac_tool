@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Xcode（工程由 XcodeGen 生成）
+*.xcodeproj
+*.xcworkspace
+!Packages/**/*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+*.xcresult
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# 发布产物
+*.dmg
+*.zip
+*.xcarchive
+
+# 凭据与敏感数据（严禁提交）
+*.env
+.env*
+auth.json
+*.vscdb
+*.har
+secrets/
+
+# Sparkle 签名私钥（只能放在 GitHub Actions Secret 中）
+*sparkle*private*
+*.pem
+*.p12
