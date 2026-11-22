@@ -68,6 +68,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
     dependencies:
       - package: MacToolCore
+      - sdk: AppIntents.framework
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
 

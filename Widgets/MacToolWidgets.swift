@@ -204,22 +204,6 @@ struct CodexQuotaWidget: Widget {
     }
 }
 
-struct AntigravityQuotaWidget: Widget {
-    let kind = "AntigravityQuotaWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(
-            kind: kind,
-            provider: ProviderQuotaTimelineProvider(provider: .antigravity)
-        ) { entry in
-            ProviderQuotaWidgetView(entry: entry)
-        }
-        .configurationDisplayName("Antigravity 额度")
-        .description("显示 Antigravity 各模型剩余额度与重置时间。")
-        .supportedFamilies([.systemSmall, .systemMedium])
-    }
-}
-
 struct CursorQuotaWidget: Widget {
     let kind = "CursorQuotaWidget"
 
