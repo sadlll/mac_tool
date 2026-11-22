@@ -129,12 +129,83 @@ public protocol UsageProvider: Sendable {
 - 测试中禁止访问真实网络或读取真实凭据，用协议注入 Mock
 - 菜单与界面逻辑通过状态/模型层测试，不要在 CI 中构造真实的 `NSStatusBar` / `NSMenu`（无界面环境下很不稳定）
 
-## Git 与提交
+## 工作流程：分支与 PR
 
-- 分支命名：`feat/xxx`、`fix/xxx`、`docs/xxx`、`chore/xxx`
+**所有改动都通过 PR 合入 `main`，禁止直接向 `main` 提交或推送。**
+
+### 1. 开分支
+
+- 每个任务都从最新的 `main` 拉一个新分支：
+
+  ```bash
+  git fetch origin
+  git switch -c feat/codex-weekly-quota origin/main
+  ```
+
+- 分支命名：`feat/xxx`、`fix/xxx`、`docs/xxx`、`chore/xxx`、`refactor/xxx`
+- 开始前先看 `git status`：保留维护者在本地已有的未提交修改，不要覆盖、`stash` 后丢弃，也不要把它们混进自己的提交
+- 一个分支、一个 PR 只做一件事，不要顺手提交无关改动
+
+### 2. 提交
+
 - Commit 信息遵循 Conventional Commits，例如：`feat(codex): 支持周额度解析`
 - **禁止提交**：`*.xcodeproj`（由 XcodeGen 生成）、`DerivedData/`、`.build/`、任何真实凭据、抓包数据或签名私钥
-- 一个 PR 只做一件事，PR 描述里写明动机、改动、**实际执行过的验证命令**；UI 改动需附截图或 GIF
+
+### 3. 本地验证
+
+推送前在本地跑完 [常用命令](#常用命令) 中的完整测试、`swiftlint --strict` 和 `swiftformat --lint .`，全部通过后再开 PR。
+
+### 4. 开 PR
+
+```bash
+git push -u origin HEAD
+gh pr create --base main --fill
+```
+
+PR 描述必须包含：
+
+- **动机**：为什么要改
+- **改动**：改了什么
+- **验证**：实际执行过的命令和结果（没跑过的不要写）；UI 改动附截图或 GIF
+- **安全审查**：如果属于下面的“敏感改动”，在描述开头写明，并加上 `security-review` 标签
+
+### 5. 等 CI
+
+- 用 `gh pr checks --watch` 只等待这个 PR 的检查结果，检查结束就停止等待
+- 不要为了重跑检查推送空提交，也不要去监听已合并的旧分支
+- CI 失败时在同一分支上修复并推送，不要另开 PR
+
+### 6. 合并
+
+| 改动类型 | 谁合并 |
+| --- | --- |
+| 普通改动：功能、修复、测试、文档、重构 | CI 全部通过后，**AI 自己用 squash 方式合并** |
+| **敏感改动**（见下方） | **只能由维护者人工 review 后合并**，AI 开完 PR 后汇报链接并停下 |
+
+敏感改动是指涉及以下任何一项的改动：
+
+- 凭据读取逻辑（`Credentials/`）或凭据相关的文件路径
+- 网络请求的域名
+- 沙盒与权限（`*.entitlements`、App Group、`Info.plist` 中的权限声明）
+- 自动更新（`App/Update/`、`SUFeedURL`、`SUPublicEDKey`、Sparkle 版本）
+- 发布与 CI（`.github/workflows/`、`Scripts/release*`、签名与公证配置）
+- 新增任何第三方依赖
+
+普通改动的合并命令：
+
+```bash
+gh pr merge --squash --delete-branch
+git switch main && git pull --ff-only
+git branch -d <分支名>
+```
+
+- 合并后删除远程和本地的功能分支；不要删 `main`，也不要删还有未合并提交或未关闭 PR 的分支
+- **禁止推送 tag**：打 tag 会触发发布，只能由维护者操作
+
+### 7. 如实汇报
+
+- 汇报结果时写清楚：PR 链接、是否已合并、跑过哪些验证
+- 本地验证没跑、CI 失败或因为敏感改动在等人工合并时，要明确说出来，不能把“已开 PR”说成“已完成”
 
 ## AI 助手工作守则
 
@@ -145,4 +216,4 @@ public protocol UsageProvider: Sendable {
 5. 需要验证 UI 或运行时行为时，先结束旧进程再启动新编译的版本，确认运行的不是旧的二进制；小组件改动后可能还需要重新添加小组件才能生效
 6. 除 Sparkle 外不要引入第三方依赖；确实需要的话，在 PR 里说明理由
 7. 不要为了让测试通过而删掉测试或断言
-8. 涉及凭据读取、网络域名、沙盒权限（entitlements）或自动更新配置的改动，必须在 PR 描述里单独标注，方便安全审查
+8. 敏感改动按 [合并](#6-合并) 一节的要求处理：PR 里单独标注，并等维护者人工合并
