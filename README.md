@@ -5,10 +5,10 @@
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.10%2B-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-开发中-yellow)
+![Status](https://img.shields.io/badge/status-核心功能已可用-brightgreen)
 
-> [!WARNING]
-> 项目处于早期开发阶段，以下功能为设计目标，尚未全部实现。进度见 [路线图](#路线图)。
+> [!NOTE]
+> Codex、Cursor、Antigravity 三个服务的菜单栏监控、桌面小组件（圆环 / Codex 风格条形双样式）与阈值提醒均已可用，目前正在完善 Sparkle 2 自动更新与正式发布流水线。进度见 [路线图](#路线图)。
 
 ## 简介
 
@@ -17,10 +17,10 @@
 ## 功能特性
 
 - **菜单栏常驻**：无 Dock 图标，后台运行，资源占用很低
-- **桌面小组件**：基于 WidgetKit，可直接放在 macOS 桌面或通知中心
-  - **Codex**：5 小时会话窗口用量、周额度用量、重置倒计时
-  - **Antigravity**：各模型剩余额度与重置时间，可在小组件编辑界面选择要展示的模型
-  - **Cursor**：当前账单周期内的请求数 / 费用用量、周期起止时间
+- **桌面小组件**：基于 WidgetKit，可直接放在 macOS 桌面或通知中心，均支持右键「编辑小组件」切换 **圆环样式** 或 **条形样式（Codex 风格）**
+  - **Codex**：5 小时会话窗口剩余额度、周剩余额度与重置倒计时
+  - **Antigravity**：按官方模型分组与 5 小时 / 周窗口展示剩余额度与重置时间，可在编辑界面自定义勾选展示的分桶
+  - **Cursor**：当前账单周期总剩余额度、API 剩余额度与重置倒计时
 - **免登录关联**：只读复用本机已有的登录状态，**不保存任何账号密码**
 - **智能刷新**：默认每 5 分钟刷新一次（可选 1 / 5 / 15 / 30 分钟），睡眠和锁屏时暂停，唤醒后立即刷新，网络出错时按指数退避重试
 - **阈值提醒**：用量达到设定阈值（默认 80% / 95%）时发送系统本地通知
@@ -75,11 +75,11 @@ brew install --cask sadlll/tap/mac-tool
 
 `mac_tool` 不提供独立的账号体系，而是**以只读方式**读取各工具已经存在本地的登录凭据，再用它请求对应服务的用量接口：
 
-| 工具 | 本地凭据位置（示例） | 说明 |
+| 工具 | 本地凭据位置 | 说明 |
 | --- | --- | --- |
-| Codex | `~/.codex/auth.json` | Codex CLI 登录后生成 |
-| Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | Cursor 客户端本地存储 |
-| Antigravity | Antigravity 客户端本地凭据 | 具体路径以实现为准 |
+| Codex | `~/.codex/auth.json` | 只读解析 Codex CLI 登录后生成的本地文件 |
+| Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | 以 `SQLITE_OPEN_READONLY` 只读打开；新版加密 token 需通过 macOS 钥匙串 `"Cursor Safe Storage"` 在内存中解密（派生密钥进程内缓存，避免轮询重复弹窗） |
+| Antigravity | `~/.gemini/antigravity/daemon/*.json` | 只读获取本机守护进程端口与 CSRF Token，仅请求本机回环地址，无需钥匙串弹窗 |
 
 隐私承诺：
 
@@ -145,16 +145,23 @@ open mac_tool.xcodeproj
 
 测试、Lint 等开发命令以及目录结构见 [AGENTS.md](./AGENTS.md)。
 
+## 文档
+
+- [架构设计](docs/ARCHITECTURE.md)：进程边界、沙盒共享缓存、调度与低资源策略
+- [Provider 接入说明](docs/PROVIDERS.md)：Codex / Cursor / Antigravity 的只读凭据读取与接口字段映射
+- [本地开发指南](docs/DEVELOPMENT.md)：XcodeGen、`./Scripts/run.sh`、小组件调试与测试规范
+- [发布与自动更新指南](docs/RELEASING.md)：Sparkle 2 密钥管理、签名公证与发布流程
+
 ## 路线图
 
-- [ ] 工程脚手架：XcodeGen、MacToolCore、CI
-- [ ] 菜单栏应用骨架与设置页
-- [ ] Codex Provider + 小组件
-- [ ] Cursor Provider + 小组件
-- [ ] Antigravity Provider + 小组件（支持选择模型）
-- [ ] 阈值通知、开机自启（`SMAppService`）
+- [x] 工程脚手架：XcodeGen、MacToolCore、CI
+- [x] 菜单栏应用骨架与设置页
+- [x] Codex Provider + 小组件（圆环 / 条形双样式）
+- [x] Cursor Provider + 小组件（兼容新版 Safe Storage 加密凭据）
+- [x] Antigravity Provider + 小组件（支持自定义展示模型分桶）
+- [x] 阈值通知、睡眠/锁屏暂停与唤醒刷新、开机自启（`SMAppService`）
+- [ ] Sparkle 2 应用内更新（CI 自动生成并签名 appcast）
 - [ ] 签名、公证，GitHub Releases 自动发布
-- [ ] Sparkle 应用内更新（CI 自动生成并签名 appcast）
 - [ ] Homebrew Cask
 
 ## 同类项目
