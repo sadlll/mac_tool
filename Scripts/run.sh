@@ -16,6 +16,10 @@ xcodebuild \
   build
 
 APP_PATH="$ROOT_DIR/DerivedData/Build/Products/Debug/mac_tool.app"
+WIDGET_PATH="$APP_PATH/Contents/PlugIns/MacToolWidgets.appex"
+
+echo "==> 注册小组件扩展..."
+pluginkit -a "$WIDGET_PATH" >/dev/null 2>&1 || true
 
 echo "==> 结束旧进程并启动新编译版本..."
 pkill -x mac_tool || true
