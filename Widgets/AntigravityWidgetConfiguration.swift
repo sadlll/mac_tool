@@ -123,7 +123,7 @@ struct AntigravityQuotaWidgetView: View {
     }
 
     private func resolveVisibleModels(from allModels: [ModelQuota]) -> [ModelQuota] {
-        let maxCount = family == .systemSmall ? 3 : 4
+        let maxCount = family == .systemSmall ? 3 : 5
         if !entry.selectedModelIDs.isEmpty {
             let selectedSet = Set(entry.selectedModelIDs)
             let filtered = allModels.filter { selectedSet.contains($0.id) }
@@ -131,8 +131,7 @@ struct AntigravityQuotaWidgetView: View {
                 return Array(filtered.prefix(maxCount))
             }
         }
-        let sorted = allModels.sorted { $0.remainingPercentage < $1.remainingPercentage }
-        return Array(sorted.prefix(maxCount))
+        return Array(allModels.prefix(maxCount))
     }
 
     private func modelRow(_ model: ModelQuota) -> some View {

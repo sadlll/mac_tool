@@ -181,7 +181,7 @@ struct MenuBarContentView: View {
             .buttonStyle(.borderless)
         }
         .padding(14)
-        .frame(width: 280)
+        .frame(width: 320)
     }
 }
 
@@ -217,7 +217,7 @@ private struct ProviderStatusRow: View {
 
             if let snapshot = runtimeState?.snapshot {
                 if !snapshot.modelQuotas.isEmpty {
-                    ForEach(snapshot.modelQuotas.prefix(4)) { modelQuota in
+                    ForEach(snapshot.modelQuotas) { modelQuota in
                         modelQuotaRow(modelQuota)
                     }
                 } else {

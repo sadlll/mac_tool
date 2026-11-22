@@ -57,6 +57,28 @@ final class AntigravityProviderTests: XCTestCase {
         XCTAssertEqual(daemons.first?.csrfToken, "fake-csrf-token")
     }
 
+    func testQuotaSummaryParserParsesGroupedBuckets() throws {
+        let data = try loadFixture("antigravity_quota_summary_valid.json")
+        let fetchedAt = Date(timeIntervalSince1970: 1_795_380_000)
+        let snapshot = try AntigravityUsageParser().parseQuotaSummary(
+            data: data,
+            planName: "Pro",
+            fetchedAt: fetchedAt
+        )
+
+        XCTAssertEqual(snapshot.provider, .antigravity)
+        XCTAssertEqual(snapshot.planName, "Pro")
+        XCTAssertEqual(snapshot.modelQuotas.count, 5)
+        XCTAssertEqual(snapshot.modelQuotas[0].id, "alpha_weekly")
+        XCTAssertEqual(snapshot.modelQuotas[0].modelName, "Alpha Models · 周")
+        XCTAssertEqual(snapshot.modelQuotas[0].remainingPercentage, 67, accuracy: 0.01)
+        XCTAssertEqual(snapshot.modelQuotas[3].id, "beta_5h")
+        XCTAssertEqual(snapshot.modelQuotas[3].modelName, "Beta Models · 5h")
+        XCTAssertEqual(snapshot.modelQuotas[3].remainingPercentage, 0, accuracy: 0.01)
+        XCTAssertEqual(snapshot.primaryWindow?.label, "Beta Models · 5h")
+        XCTAssertEqual(snapshot.primaryWindow?.usedPercentage ?? 0, 100, accuracy: 0.01)
+    }
+
     func testUsageParserParsesValidFixtureAndRejectsMalformed() throws {
         let data = try loadFixture("antigravity_user_status_valid.json")
         let fetchedAt = Date(timeIntervalSince1970: 1_795_380_000)
@@ -82,13 +104,13 @@ final class AntigravityProviderTests: XCTestCase {
     }
 
     func testProviderFallsBackAcrossStaleAndLiveDaemons() async throws {
-        let statusData = try loadFixture("antigravity_user_status_valid.json")
+        let summaryData = try loadFixture("antigravity_quota_summary_valid.json")
         let staleDaemon = AntigravityDaemonInfo(httpPort: 40001, csrfToken: "stale-token")
         let liveDaemon = AntigravityDaemonInfo(httpPort: 40002, csrfToken: "live-token")
 
         let client = MockAntigravityHTTPClient(responsesByPort: [
             40001: .failure(ProviderError.networkFailure("连接被拒绝")),
-            40002: .success((200, statusData)),
+            40002: .success((200, summaryData)),
         ])
 
         let provider = AntigravityProvider(
@@ -101,7 +123,7 @@ final class AntigravityProviderTests: XCTestCase {
 
         let snapshot = try await provider.fetchUsage()
         XCTAssertEqual(snapshot.provider, .antigravity)
-        XCTAssertEqual(snapshot.modelQuotas.count, 3)
+        XCTAssertEqual(snapshot.modelQuotas.count, 5)
     }
 
     func testProviderReturnsMissingWhenNoDaemonExists() async {

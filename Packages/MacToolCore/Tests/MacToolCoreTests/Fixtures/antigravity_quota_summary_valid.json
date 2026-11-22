@@ -1,0 +1,56 @@
+{
+  "response": {
+    "groups": [
+      {
+        "displayName": "Alpha Models",
+        "buckets": [
+          {
+            "bucketId": "alpha_weekly",
+            "displayName": "Weekly Limit Remaining",
+            "window": "weekly",
+            "remainingFraction": 0.67,
+            "resetTime": "2026-11-30T00:00:00Z"
+          },
+          {
+            "bucketId": "alpha_5h",
+            "displayName": "Five Hour Limit Remaining",
+            "window": "5h",
+            "remainingFraction": 0.49,
+            "resetTime": "2026-11-23T11:00:00Z"
+          }
+        ]
+      },
+      {
+        "displayName": "Beta Models",
+        "buckets": [
+          {
+            "bucketId": "beta_weekly",
+            "displayName": "Weekly Limit Remaining",
+            "window": "weekly",
+            "remainingFraction": 0.47,
+            "resetTime": "2026-11-23T10:30:00Z"
+          },
+          {
+            "bucketId": "beta_5h",
+            "displayName": "Five Hour Limit Remaining",
+            "window": "5h",
+            "remainingFraction": 0,
+            "resetTime": "2026-11-23T10:30:00Z"
+          }
+        ]
+      },
+      {
+        "displayName": "Gamma Models",
+        "buckets": [
+          {
+            "bucketId": "gamma_weekly",
+            "displayName": "Weekly Limit",
+            "window": "weekly",
+            "remainingFraction": 1,
+            "resetTime": "2026-11-30T00:00:00Z"
+          }
+        ]
+      }
+    ]
+  }
+}
