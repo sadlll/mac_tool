@@ -49,6 +49,7 @@ public struct CursorSafeStorageDecryptor: Sendable {
     private static let v10Header = Data("v10".utf8)
 
     private let keychainReader: any KeychainPasswordReader
+    private let keyCache = InMemoryDerivedKeyCache()
 
     /// 初始化 Cursor Safe Storage 解密器。
     public init(keychainReader: any KeychainPasswordReader = SystemKeychainPasswordReader()) {
@@ -61,6 +62,7 @@ public struct CursorSafeStorageDecryptor: Sendable {
     }
 
     /// 解密 `cursor-safe-storage:v1:<base64>` 字符串；若已是明文则原样返回。
+    /// 主密钥派生结果仅缓存在内存中，避免定时轮询反复触发系统钥匙串读取。
     public func decryptIfNeeded(_ rawValue: String) throws -> String {
         guard Self.isEncrypted(rawValue) else {
             return rawValue
@@ -70,16 +72,30 @@ public struct CursorSafeStorageDecryptor: Sendable {
             throw ProviderError.credentialInvalid("Cursor 加密凭据 Base64 格式无效")
         }
 
-        let password = try keychainReader.readGenericPassword(
-            service: Self.keychainService,
-            account: Self.keychainAccount
-        )
-        return try decryptBlob(blob, password: password)
+        let key = try resolveCachedKey()
+        return try decryptBlob(blob, key: key)
     }
 
     /// 使用给定主密码解密 Chromium `v10` 密文块（便于单元测试直接验证加解密逻辑）。
     public func decryptBlob(_ blob: Data, password: String) throws -> String {
         let key = try deriveKey(from: password)
+        return try decryptBlob(blob, key: key)
+    }
+
+    private func resolveCachedKey() throws -> Data {
+        if let cached = keyCache.get() {
+            return cached
+        }
+        let password = try keychainReader.readGenericPassword(
+            service: Self.keychainService,
+            account: Self.keychainAccount
+        )
+        let derived = try deriveKey(from: password)
+        keyCache.set(derived)
+        return derived
+    }
+
+    private func decryptBlob(_ blob: Data, key: Data) throws -> String {
         let ciphertext: Data = if blob.starts(with: Self.v10Header) {
             Data(blob.dropFirst(Self.v10Header.count))
         } else {
@@ -153,5 +169,23 @@ public struct CursorSafeStorageDecryptor: Sendable {
         }
         output.removeSubrange(decryptedLength ..< output.count)
         return output
+    }
+}
+
+/// 进程内派生密钥缓存（仅驻留内存，随进程退出销毁）。
+private final class InMemoryDerivedKeyCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var key: Data?
+
+    func get() -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return key
+    }
+
+    func set(_ newKey: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        key = newKey
     }
 }
