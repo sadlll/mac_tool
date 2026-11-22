@@ -2,33 +2,103 @@ import AppKit
 import MacToolCore
 import Observation
 import SwiftUI
+import WidgetKit
 
-/// 主应用状态模型，管理各服务的用量快照与刷新状态。
+/// 主应用状态模型，桥接统一调度器、电源监听、通知服务与 SwiftUI 界面。
 @MainActor
 @Observable
 final class AppModel {
-    /// 各服务最新缓存快照（按服务严格隔离）。
-    var snapshots: [ProviderID: UsageSnapshot] = [:]
-    /// 最近一次刷新时间。
-    var lastUpdatedAt: Date?
+    private static let widgetKinds = [
+        "CodexQuotaWidget",
+        "AntigravityQuotaWidget",
+        "CursorQuotaWidget",
+    ]
 
-    private let store: SnapshotStore?
+    /// 调度器发布的最新状态。
+    var schedulerState = SchedulerState()
 
-    init() {
-        if let directoryURL = AppGroupConfig.snapshotsDirectoryURL() {
-            store = SnapshotStore(directoryURL: directoryURL)
-        } else {
-            store = nil
-        }
+    let settings: SettingsStore
+    private let powerMonitor = WorkspacePowerMonitor()
+    private let notificationService = QuotaNotificationService()
+    private var scheduler: UsageScheduler?
+    private var hasStarted = false
+
+    init(settings: SettingsStore = SettingsStore()) {
+        self.settings = settings
     }
 
-    /// 从共享缓存加载已保存的快照。
-    func loadCachedSnapshots() async {
-        guard let store else {
+    /// 启动调度器与系统电源/锁屏监听（幂等，仅首次生效）。
+    func startIfNeeded() async {
+        guard !hasStarted else {
             return
         }
-        snapshots = await store.loadAll()
-        lastUpdatedAt = snapshots.values.map(\.fetchedAt).max()
+        hasStarted = true
+
+        let store: SnapshotStore? = AppGroupConfig.snapshotsDirectoryURL().map {
+            SnapshotStore(directoryURL: $0)
+        }
+
+        let notificationService = notificationService
+        let widgetKinds = Self.widgetKinds
+
+        let scheduler = UsageScheduler(
+            providers: [],
+            store: store,
+            refreshInterval: settings.refreshInterval,
+            alertSettings: settings.alertSettings,
+            onStateChange: { [weak self] newState in
+                await MainActor.run {
+                    self?.schedulerState = newState
+                }
+            },
+            onAlert: { event in
+                await notificationService.send(event)
+            },
+            onReloadWidgets: {
+                for kind in widgetKinds {
+                    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+                }
+            }
+        )
+        self.scheduler = scheduler
+
+        if settings.alertSettings.isEnabled {
+            await notificationService.requestAuthorizationIfNeeded()
+        }
+
+        powerMonitor.start(
+            onPause: {
+                await scheduler.pause()
+            },
+            onResume: {
+                await scheduler.resumeAndRefresh()
+            }
+        )
+
+        await scheduler.start()
+    }
+
+    /// 立即手动刷新所有已接入的服务。
+    func refreshNow() async {
+        await scheduler?.refreshNow()
+    }
+
+    /// 重新检测本机各服务的登录凭据。
+    func detectCredentials() async {
+        await scheduler?.detectAllCredentials()
+    }
+
+    /// 将刷新间隔变更同步到调度器。
+    func applyRefreshInterval(_ interval: RefreshInterval) async {
+        await scheduler?.updateRefreshInterval(interval)
+    }
+
+    /// 将阈值提醒变更同步到调度器。
+    func applyAlertSettings(_ alertSettings: AlertThresholdSettings) async {
+        if alertSettings.isEnabled {
+            await notificationService.requestAuthorizationIfNeeded()
+        }
+        await scheduler?.updateAlertSettings(alertSettings)
     }
 }
 
@@ -40,10 +110,14 @@ struct MacToolApp: App {
         MenuBarExtra("mac_tool", systemImage: "gauge.with.dots.needle.67percent") {
             MenuBarContentView(model: model)
                 .task {
-                    await model.loadCachedSnapshots()
+                    await model.startIfNeeded()
                 }
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView(settings: model.settings, model: model)
+        }
     }
 }
 
@@ -56,7 +130,14 @@ struct MenuBarContentView: View {
                 Text("mac_tool")
                     .font(.headline)
                 Spacer()
-                if let lastUpdatedAt = model.lastUpdatedAt {
+                if model.schedulerState.isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if model.schedulerState.isPaused {
+                    Text("已暂停")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let lastUpdatedAt = model.schedulerState.lastUpdatedAt {
                     Text(lastUpdatedAt, style: .time)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -68,19 +149,26 @@ struct MenuBarContentView: View {
             ForEach(ProviderID.allCases) { provider in
                 ProviderStatusRow(
                     provider: provider,
-                    snapshot: model.snapshots[provider]
+                    runtimeState: model.schedulerState.providers[provider]
                 )
             }
 
             Divider()
 
             HStack {
-                Button("重新读取缓存") {
+                Button("立即刷新") {
                     Task {
-                        await model.loadCachedSnapshots()
+                        await model.refreshNow()
                     }
                 }
+                .disabled(model.schedulerState.isRefreshing)
+
                 Spacer()
+
+                SettingsLink {
+                    Text("设置…")
+                }
+
                 Button("退出") {
                     NSApplication.shared.terminate(nil)
                 }
@@ -94,17 +182,21 @@ struct MenuBarContentView: View {
 
 private struct ProviderStatusRow: View {
     let provider: ProviderID
-    let snapshot: UsageSnapshot?
+    let runtimeState: ProviderRuntimeState?
 
     var body: some View {
         HStack {
             Text(provider.displayName)
                 .font(.subheadline.weight(.medium))
             Spacer()
-            if let primary = snapshot?.primaryWindow {
+            if let primary = runtimeState?.snapshot?.primaryWindow {
                 Text("\(Int(primary.usedPercentage.rounded()))%")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
+            } else if runtimeState?.lastErrorMessage != nil {
+                Text("拉取失败")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             } else {
                 Text("暂未同步")
                     .font(.caption)
