@@ -42,7 +42,7 @@ final class AppModel {
         let widgetKinds = Self.widgetKinds
 
         let scheduler = UsageScheduler(
-            providers: [CodexProvider()],
+            providers: [CodexProvider(), CursorProvider()],
             store: store,
             refreshInterval: settings.refreshInterval,
             alertSettings: settings.alertSettings,
