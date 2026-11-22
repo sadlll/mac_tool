@@ -147,6 +147,9 @@ open mac_tool.xcodeproj
 
 ## 文档
 
+- [产品与技术规格（SPEC）](docs/SPEC.md)：数据模型、接口契约、状态流转、异常边界与验收标准
+- [实施计划（PLAN）](docs/PLAN.md)：按任务拆解的进度清单与验证命令
+- [架构决策记录（ADR）](docs/adr/)：关键技术选型与决策依据（`0001`–`0006`）
 - [架构设计](docs/ARCHITECTURE.md)：进程边界、沙盒共享缓存、调度与低资源策略
 - [Provider 接入说明](docs/PROVIDERS.md)：Codex / Cursor / Antigravity 的只读凭据读取与接口字段映射
 - [本地开发指南](docs/DEVELOPMENT.md)：XcodeGen、`./Scripts/run.sh`、小组件调试与测试规范
