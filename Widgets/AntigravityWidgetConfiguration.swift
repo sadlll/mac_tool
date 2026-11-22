@@ -16,7 +16,7 @@ struct AntigravityModelEntity: AppEntity {
     }
 }
 
-/// 从 App Group 只读缓存中读取可用模型列表的实体查询器。
+/// 从只读共享缓存中读取可用模型分组的实体查询器。
 struct AntigravityModelQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [AntigravityModelEntity] {
         let allModels = loadAvailableModels()
@@ -39,10 +39,13 @@ struct AntigravityModelQuery: EntityQuery {
     }
 }
 
-/// Antigravity 小组件配置意图：允许用户在编辑小组件时勾选要展示的模型。
+/// Antigravity 小组件配置意图：支持选择展示样式与自定义展示的模型分桶。
 struct SelectAntigravityModelsIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "选择展示的模型"
-    static var description = IntentDescription("选择在 Antigravity 小组件中展示的模型；留空则自动展示剩余额度最紧缺的模型。")
+    static var title: LocalizedStringResource = "Antigravity 小组件设置"
+    static var description = IntentDescription("切换圆环/条形样式，并自定义要展示的模型分桶。")
+
+    @Parameter(title: "展示样式", default: .ring)
+    var style: WidgetDisplayStyle
 
     @Parameter(title: "展示模型")
     var selectedModels: [AntigravityModelEntity]?
@@ -51,6 +54,7 @@ struct SelectAntigravityModelsIntent: WidgetConfigurationIntent {
 struct AntigravityQuotaEntry: TimelineEntry {
     let date: Date
     let snapshot: UsageSnapshot?
+    let style: WidgetDisplayStyle
     let selectedModelIDs: [String]
 }
 
@@ -58,7 +62,7 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
     private let reader = ReadOnlySnapshotReader()
 
     func placeholder(in _: Context) -> AntigravityQuotaEntry {
-        AntigravityQuotaEntry(date: Date(), snapshot: nil, selectedModelIDs: [])
+        AntigravityQuotaEntry(date: Date(), snapshot: nil, style: .ring, selectedModelIDs: [])
     }
 
     func snapshot(
@@ -68,6 +72,7 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
         AntigravityQuotaEntry(
             date: Date(),
             snapshot: reader.snapshot(for: .antigravity),
+            style: configuration.style,
             selectedModelIDs: configuration.selectedModels?.map(\.id) ?? []
         )
     }
@@ -79,6 +84,7 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
         let entry = AntigravityQuotaEntry(
             date: Date(),
             snapshot: reader.snapshot(for: .antigravity),
+            style: configuration.style,
             selectedModelIDs: configuration.selectedModels?.map(\.id) ?? []
         )
         return Timeline(entries: [entry], policy: .never)
@@ -90,40 +96,98 @@ struct AntigravityQuotaWidgetView: View {
     let entry: AntigravityQuotaEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text(ProviderID.antigravity.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                if let planName = entry.snapshot?.planName {
-                    Text(planName)
-                        .font(.caption2)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(.quaternary, in: Capsule())
-                }
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            WidgetHeaderBar(
+                provider: .antigravity,
+                planName: entry.snapshot?.planName
+            )
 
             if let snapshot = entry.snapshot, !snapshot.modelQuotas.isEmpty {
-                let visibleModels = resolveVisibleModels(from: snapshot.modelQuotas)
-                ForEach(visibleModels) { model in
-                    modelRow(model)
+                if entry.style == .ring {
+                    ringBody(allModels: snapshot.modelQuotas)
+                } else {
+                    barBody(allModels: snapshot.modelQuotas)
                 }
-                Spacer(minLength: 0)
             } else {
                 Spacer()
                 Text("等待主应用同步数据")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
     }
 
-    private func resolveVisibleModels(from allModels: [ModelQuota]) -> [ModelQuota] {
-        let maxCount = family == .systemSmall ? 3 : 5
+    @ViewBuilder
+    private func ringBody(allModels: [ModelQuota]) -> some View {
+        let isSmall = family == .systemSmall
+        let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 2 : 4)
+        Spacer(minLength: 0)
+        HStack(spacing: isSmall ? 8 : 10) {
+            ForEach(visible) { model in
+                let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
+                QuotaRingMetricView(
+                    title: parts.name,
+                    badge: parts.badge,
+                    remainingPercentage: model.remainingPercentage,
+                    resetText: isSmall
+                        ? nil
+                        : WidgetStyleHelper.compactResetText(resetAt: model.resetAt, from: entry.date),
+                    ringSize: isSmall ? 48 : 54,
+                    lineWidth: isSmall ? 5 : 5.5
+                )
+            }
+        }
+        Spacer(minLength: 0)
+    }
+
+    @ViewBuilder
+    private func barBody(allModels: [ModelQuota]) -> some View {
+        let isSmall = family == .systemSmall
+        let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 3 : 5)
+        VStack(alignment: .leading, spacing: isSmall ? 6 : 5) {
+            ForEach(visible) { model in
+                compactBucketBarRow(model, showReset: !isSmall)
+            }
+        }
+        Spacer(minLength: 0)
+    }
+
+    private func compactBucketBarRow(_ model: ModelQuota, showReset: Bool) -> some View {
+        let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
+        let color = WidgetStyleHelper.remainingColor(for: model.remainingPercentage)
+
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(parts.name)
+                    .font(.caption2.weight(.medium))
+                    .lineLimit(1)
+                if let badge = parts.badge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 0.5)
+                        .background(.quaternary, in: Capsule())
+                }
+                Spacer(minLength: 4)
+                Text("\(Int(model.remainingPercentage.rounded()))%")
+                    .font(.caption2.bold().monospacedDigit())
+                    .foregroundStyle(model.remainingPercentage <= 5 ? .red : .primary)
+                if showReset, let reset = WidgetStyleHelper.compactResetText(resetAt: model.resetAt, from: entry.date) {
+                    Text(reset.replacingOccurrences(of: "后重置", with: ""))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            CapsuleProgressBar(fraction: model.remainingPercentage / 100.0, color: color, height: 4.5)
+        }
+    }
+
+    private func resolveVisibleModels(from allModels: [ModelQuota], maxCount: Int) -> [ModelQuota] {
         if !entry.selectedModelIDs.isEmpty {
             let selectedSet = Set(entry.selectedModelIDs)
             let filtered = allModels.filter { selectedSet.contains($0.id) }
@@ -132,38 +196,6 @@ struct AntigravityQuotaWidgetView: View {
             }
         }
         return Array(allModels.prefix(maxCount))
-    }
-
-    private func modelRow(_ model: ModelQuota) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(model.modelName)
-                    .font(.caption2.weight(.medium))
-                    .lineLimit(1)
-                Spacer()
-                Text("\(Int(model.remainingPercentage.rounded()))%")
-                    .font(.caption2.bold().monospacedDigit())
-                    .foregroundStyle(remainingColor(for: model.remainingPercentage))
-                if family != .systemSmall, let resetAt = model.resetAt, resetAt > entry.date {
-                    Text(resetAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            ProgressView(value: model.remainingPercentage, total: 100)
-                .tint(remainingColor(for: model.remainingPercentage))
-        }
-    }
-
-    private func remainingColor(for remainingPercentage: Double) -> Color {
-        if remainingPercentage <= 5 {
-            return .red
-        }
-        if remainingPercentage <= 20 {
-            return .orange
-        }
-        return .accentColor
     }
 }
 
@@ -179,7 +211,7 @@ struct AntigravityQuotaWidget: Widget {
             AntigravityQuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Antigravity 额度")
-        .description("显示 Antigravity 各模型剩余额度与重置时间，可在编辑小组件时自定义展示模型。")
+        .description("显示 Antigravity 各模型组剩余额度，支持切换圆环/条形样式与自定义模型。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
