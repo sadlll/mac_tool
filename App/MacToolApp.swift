@@ -104,14 +104,19 @@ final class AppModel {
 
 @main
 struct MacToolApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        let appModel = AppModel()
+        _model = State(initialValue: appModel)
+        Task { @MainActor in
+            await appModel.startIfNeeded()
+        }
+    }
 
     var body: some Scene {
         MenuBarExtra("mac_tool", systemImage: "gauge.with.dots.needle.67percent") {
             MenuBarContentView(model: model)
-                .task {
-                    await model.startIfNeeded()
-                }
         }
         .menuBarExtraStyle(.window)
 
