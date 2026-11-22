@@ -1,0 +1,84 @@
+name: mac_tool
+options:
+  bundleIdPrefix: com.sadlll
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+packages:
+  MacToolCore:
+    path: Packages/MacToolCore
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  mac_tool:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - "**/*.entitlements"
+          - "**/Info.plist"
+      - path: Resources
+    info:
+      path: App/Info.plist
+    entitlements:
+      path: App/mac_tool.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sadlll.mac-tool
+        PRODUCT_NAME: mac_tool
+        COMBINE_HIDPI_IMAGES: YES
+        ENABLE_HARDENED_RUNTIME: NO
+    dependencies:
+      - package: MacToolCore
+      - target: MacToolWidgets
+        embed: true
+        codeSign: true
+
+  MacToolWidgets:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Widgets
+        excludes:
+          - "**/*.entitlements"
+          - "**/Info.plist"
+    info:
+      path: Widgets/Info.plist
+    entitlements:
+      path: Widgets/MacToolWidgets.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sadlll.mac-tool.widgets
+        PRODUCT_NAME: MacToolWidgets
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: NO
+    dependencies:
+      - package: MacToolCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+
+schemes:
+  mac_tool:
+    build:
+      targets:
+        mac_tool: all
+        MacToolWidgets: all
+    run:
+      config: Debug
+      executable: mac_tool
+    archive:
+      config: Release
