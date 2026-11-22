@@ -1,0 +1,33 @@
+included:
+  - App
+  - Widgets
+  - Packages/MacToolCore/Sources
+  - Packages/MacToolCore/Tests
+
+excluded:
+  - .build
+  - DerivedData
+  - Packages/MacToolCore/.build
+
+line_length:
+  warning: 120
+  error: 120
+
+file_length:
+  warning: 400
+  error: 500
+
+opt_in_rules:
+  - force_unwrapping
+
+analyzer_rules: []
+
+disabled_rules:
+  - trailing_comma
+
+custom_rules:
+  no_legacy_observable_object:
+    name: "禁止使用 ObservableObject"
+    regex: '\b(ObservableObject|@ObservedObject|@StateObject)\b'
+    message: "状态管理请使用 @Observable、@State 与 @Bindable，禁止使用 ObservableObject。"
+    severity: error
