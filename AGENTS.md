@@ -177,21 +177,16 @@ PR 描述必须包含：
 
 ### 6. 合并
 
-| 改动类型 | 谁合并 |
-| --- | --- |
-| 普通改动：功能、修复、测试、文档、重构 | CI 全部通过后，**AI 自己用 squash 方式合并** |
-| **敏感改动**（见下方） | **只能由维护者人工 review 后合并**，AI 开完 PR 后汇报链接并停下 |
+- **全部 PR 在 CI 检查通过后，由 AI 自己用 squash 方式合并**，不再停下来等人工点合并
+- 如果涉及以下“敏感改动”，仍须在 PR 描述开头写明安全说明并加上 `security-review` 标签，方便事后审计：
+  - 凭据读取逻辑（`Credentials/`）或凭据相关的文件路径
+  - 网络请求的域名
+  - 沙盒与权限（`*.entitlements`、App Group、`Info.plist` 中的权限声明）
+  - 自动更新（`App/Update/`、`SUFeedURL`、`SUPublicEDKey`、Sparkle 版本）
+  - 发布与 CI（`.github/workflows/`、`Scripts/release*`、签名与公证配置）
+  - 新增任何第三方依赖
 
-敏感改动是指涉及以下任何一项的改动：
-
-- 凭据读取逻辑（`Credentials/`）或凭据相关的文件路径
-- 网络请求的域名
-- 沙盒与权限（`*.entitlements`、App Group、`Info.plist` 中的权限声明）
-- 自动更新（`App/Update/`、`SUFeedURL`、`SUPublicEDKey`、Sparkle 版本）
-- 发布与 CI（`.github/workflows/`、`Scripts/release*`、签名与公证配置）
-- 新增任何第三方依赖
-
-普通改动的合并命令：
+合并命令：
 
 ```bash
 gh pr merge --squash --delete-branch
@@ -205,7 +200,7 @@ git branch -d <分支名>
 ### 7. 如实汇报
 
 - 汇报结果时写清楚：PR 链接、是否已合并、跑过哪些验证
-- 本地验证没跑、CI 失败或因为敏感改动在等人工合并时，要明确说出来，不能把“已开 PR”说成“已完成”
+- 本地验证没跑或 CI 失败时，要明确说出来，不能把“已开 PR”说成“已完成”
 
 ## AI 助手工作守则
 
@@ -216,4 +211,4 @@ git branch -d <分支名>
 5. 需要验证 UI 或运行时行为时，先结束旧进程再启动新编译的版本，确认运行的不是旧的二进制；小组件改动后可能还需要重新添加小组件才能生效
 6. 除 Sparkle 外不要引入第三方依赖；确实需要的话，在 PR 里说明理由
 7. 不要为了让测试通过而删掉测试或断言
-8. 敏感改动按 [合并](#6-合并) 一节的要求处理：PR 里单独标注，并等维护者人工合并
+8. 敏感改动仍须在 PR 描述开头写明安全说明并加上 `security-review` 标签，CI 通过后由 AI 自动 squash 合并
