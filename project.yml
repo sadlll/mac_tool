@@ -34,6 +34,10 @@ targets:
       - path: Resources
     info:
       path: App/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDisplayName: mac_tool
+        LSUIElement: true
     entitlements:
       path: App/mac_tool.entitlements
       properties:
@@ -60,6 +64,11 @@ targets:
           - "**/Info.plist"
     info:
       path: Widgets/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDisplayName: mac_tool 小组件
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Widgets/MacToolWidgets.entitlements
       properties:
