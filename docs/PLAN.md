@@ -27,7 +27,7 @@
 
 ## 待完成任务
 
-- [ ] **Task 7 — 接入 Sparkle 2 应用内更新**
+- [x] **Task 7 — 接入 Sparkle 2 应用内更新**
   - 文件：`project.yml`（新增 Sparkle 2 SPM 依赖）、`App/Update/UpdateController.swift`、`App/MacToolApp.swift`（菜单栏增加「检查更新…」）、`App/Settings/SettingsView.swift`（新增「更新」设置页）、`App/Info.plist`（`SUFeedURL`、`SUPublicEDKey`）
   - 要点：仅使用 `SPUStandardUpdaterController`；默认每 24 小时检查一次，仅推稳定版，禁止关闭 EdDSA 校验
   - 验证：`xcodegen generate && xcodebuild -project mac_tool.xcodeproj -scheme mac_tool build` + `swiftlint --strict`
