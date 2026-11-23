@@ -90,8 +90,13 @@ enum WidgetUpgradeRecovery {
         else {
             return false
         }
+        var executablePath = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let pathBytesRead = proc_pidpath(pid, &executablePath, UInt32(executablePath.count))
+        if pathBytesRead > 0, String(cString: executablePath) == path {
+            return true
+        }
         // KERN_PROCARGS2 starts with argc and the original exec path, even if the
-        // old bundle was moved or deleted. proc_pidpath can fail in that case.
+        // old bundle was moved or deleted. Only consult it if its current path did not match.
         var query = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = 0
         guard sysctl(&query, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else {
