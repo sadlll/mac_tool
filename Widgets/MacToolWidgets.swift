@@ -123,7 +123,7 @@ struct ProviderQuotaWidgetView: View {
     private func ringBody(windows: [QuotaWindow]) -> some View {
         let isSmall = family == .systemSmall
         Spacer(minLength: 0)
-        HStack(spacing: isSmall ? 10 : 18) {
+        HStack(alignment: .top, spacing: isSmall ? 10 : 18) {
             ForEach(windows.prefix(2)) { window in
                 QuotaRingMetricView(
                     title: shortWindowTitle(window),

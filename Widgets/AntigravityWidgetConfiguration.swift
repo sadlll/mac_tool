@@ -125,7 +125,7 @@ struct AntigravityQuotaWidgetView: View {
         let isSmall = family == .systemSmall
         let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 2 : 4)
         Spacer(minLength: 0)
-        HStack(spacing: isSmall ? 8 : 10) {
+        HStack(alignment: .top, spacing: isSmall ? 8 : 10) {
             ForEach(visible) { model in
                 let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
                 QuotaRingMetricView(
