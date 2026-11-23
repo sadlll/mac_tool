@@ -14,9 +14,18 @@ enum WidgetDisplayStyle: String, AppEnum {
     ]
 }
 
-/// Codex 与 Cursor 小组件的通用样式配置意图。
-struct ProviderWidgetStyleIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "小组件样式"
+/// Codex 小组件样式配置意图。
+struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Codex 小组件样式"
+    static var description = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
+
+    @Parameter(title: "展示样式", default: .ring)
+    var style: WidgetDisplayStyle
+}
+
+/// Cursor 小组件样式配置意图。
+struct CursorWidgetConfigurationIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Cursor 小组件样式"
     static var description = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
 
     @Parameter(title: "展示样式", default: .ring)
