@@ -35,11 +35,11 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build mac_tool
+      - name: Build mac_tool and test WidgetKit upgrade recovery
         run: |
           xcodebuild \
             -project mac_tool.xcodeproj \
             -scheme mac_tool \
-            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath DerivedData \
-            build
+            test

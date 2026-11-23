@@ -1,6 +1,7 @@
 included:
   - App
   - Widgets
+  - Tests
   - Packages/MacToolCore/Sources
   - Packages/MacToolCore/Tests
 
