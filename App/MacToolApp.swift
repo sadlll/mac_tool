@@ -232,11 +232,8 @@ private struct ProviderStatusRow: View {
                         modelQuotaRow(modelQuota)
                     }
                 } else {
-                    if let primary = snapshot.primaryWindow {
-                        windowProgressRow(primary)
-                    }
-                    if let secondary = snapshot.secondaryWindow {
-                        windowProgressRow(secondary)
+                    ForEach(snapshot.quotaWindows) { window in
+                        windowProgressRow(window)
                     }
                 }
             }

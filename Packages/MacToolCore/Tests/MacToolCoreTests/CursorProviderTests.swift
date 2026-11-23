@@ -49,17 +49,29 @@ private final class CountingKeychainReader: KeychainPasswordReader, @unchecked S
 private struct MockCursorHTTPClient: HTTPClient {
     let statusCode: Int
     let body: Data
+    var weeklyBody: Data?
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        guard let url = request.url ?? CursorProvider.usageEndpoint,
-              let response = HTTPURLResponse(
-                  url: url,
-                  statusCode: statusCode,
-                  httpVersion: "HTTP/1.1",
-                  headerFields: nil
-              )
+        guard let url = request.url ?? CursorProvider.usageEndpoint else {
+            throw ProviderError.invalidResponse("无法构造 Mock URL")
+        }
+        let isWeekly = url.lastPathComponent == "GetSandUsageStatus"
+        let responseCode = isWeekly ? (weeklyBody == nil ? 404 : 200) : statusCode
+        guard
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: responseCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )
         else {
             throw ProviderError.invalidResponse("无法构造 Mock 响应")
+        }
+        if isWeekly {
+            XCTAssertEqual(url.host, "api2.cursor.sh")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer plain.jwt.token")
+            XCTAssertEqual(request.httpMethod, "POST")
+            return (weeklyBody ?? Data(), response)
         }
         return (body, response)
     }
@@ -223,6 +235,8 @@ final class CursorProviderTests: XCTestCase {
         let snapshot = try await successProvider.fetchUsage()
         XCTAssertEqual(snapshot.provider, .cursor)
         XCTAssertEqual(snapshot.planName, "Pro")
+        XCTAssertNotNil(snapshot.primaryWindow)
+        XCTAssertNil(snapshot.additionalWindows)
 
         let unauthorizedProvider = CursorProvider(
             credentialReader: reader,
@@ -234,13 +248,6 @@ final class CursorProviderTests: XCTestCase {
         } catch let error as ProviderError {
             XCTAssertEqual(error, .unauthorized)
         }
-    }
-
-    private func loadFixture(_ filename: String) throws -> Data {
-        let url = try XCTUnwrap(
-            Bundle.module.url(forResource: filename, withExtension: nil, subdirectory: "Fixtures")
-        )
-        return try Data(contentsOf: url)
     }
 
     private func deriveTestKey(password: String) -> Data {
@@ -303,4 +310,73 @@ final class CursorProviderTests: XCTestCase {
         blob.append(output)
         return CursorSafeStorageDecryptor.encryptedPrefix + blob.base64EncodedString()
     }
+}
+
+final class CursorGrokBotTests: XCTestCase {
+    func testProviderAddsGrokBotWeeklyWindowFromSeparateEndpoint() async throws {
+        let usageData = try loadFixture("cursor_usage_valid.json")
+        let weeklyData = try loadFixture("cursor_grok_bot_weekly.json")
+        let reader = CursorCredentialReader(databaseReader: InMemoryCursorDB(
+            exists: true,
+            values: ["cursorAuth/accessToken": "plain.jwt.token"]
+        ))
+        let provider = CursorProvider(
+            credentialReader: reader,
+            httpClient: MockCursorHTTPClient(statusCode: 200, body: usageData, weeklyBody: weeklyData)
+        )
+        let snapshot = try await provider.fetchUsage()
+        XCTAssertEqual(snapshot.primaryWindow?.id, "monthly_total")
+        XCTAssertEqual(snapshot.secondaryWindow?.id, "monthly_api")
+        let stored = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(stored.quotaWindows.map(\.id), ["monthly_total", "monthly_api", "grok_bot_weekly"])
+        let weekly = try XCTUnwrap(stored.additionalWindows?.first)
+        XCTAssertEqual(weekly.id, "grok_bot_weekly")
+        XCTAssertEqual(weekly.usedPercentage, 100)
+        XCTAssertEqual(weekly.resetAt, Date(timeIntervalSince1970: 1_796_342_400.125))
+        XCTAssertEqual(snapshot.highestUsedPercentage, 100)
+    }
+
+    func testProviderKeepsMonthlyWindowsWhenWeeklyQuotaIsUnavailable() async throws {
+        let usageData = try loadFixture("cursor_usage_valid.json")
+        let reader = CursorCredentialReader(databaseReader: InMemoryCursorDB(
+            exists: true,
+            values: ["cursorAuth/accessToken": "plain.jwt.token"]
+        ))
+        let unavailableResponses = [
+            #"{"hasNonZeroIncludedLimit":false,"usagePercent":40}"#,
+            #"{"hasNonZeroIncludedLimit":true,"usesPooledEnterpriseAllowance":true,"usagePercent":40}"#,
+            #"{"hasNonZeroIncludedLimit":true}"#,
+        ]
+        for response in unavailableResponses {
+            let provider = CursorProvider(
+                credentialReader: reader,
+                httpClient: MockCursorHTTPClient(statusCode: 200, body: usageData, weeklyBody: Data(response.utf8))
+            )
+            let snapshot = try await provider.fetchUsage()
+            XCTAssertEqual(snapshot.quotaWindows.map(\.id), ["monthly_total", "monthly_api"])
+        }
+    }
+
+    func testProviderShowsWeeklyQuotaWhenPlanHasNoMonthlyWindow() async throws {
+        let weeklyData = try loadFixture("cursor_grok_bot_weekly.json")
+        let reader = CursorCredentialReader(databaseReader: InMemoryCursorDB(
+            exists: true,
+            values: ["cursorAuth/accessToken": "plain.jwt.token"]
+        ))
+        for statusCode in [200, 400] {
+            let provider = CursorProvider(
+                credentialReader: reader,
+                httpClient: MockCursorHTTPClient(statusCode: statusCode, body: Data("{}".utf8), weeklyBody: weeklyData)
+            )
+            let snapshot = try await provider.fetchUsage()
+            XCTAssertEqual(snapshot.quotaWindows.map(\.id), ["grok_bot_weekly"])
+        }
+    }
+}
+
+private func loadFixture(_ filename: String) throws -> Data {
+    let url = try XCTUnwrap(
+        Bundle.module.url(forResource: filename, withExtension: nil, subdirectory: "Fixtures")
+    )
+    return try Data(contentsOf: url)
 }

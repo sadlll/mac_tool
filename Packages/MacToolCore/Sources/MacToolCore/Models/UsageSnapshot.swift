@@ -86,6 +86,8 @@ public struct UsageSnapshot: Equatable, Codable, Sendable {
     public let primaryWindow: QuotaWindow?
     /// 次额度窗口（如 Codex 周额度）。
     public let secondaryWindow: QuotaWindow?
+    /// 额外额度窗口（如 Cursor 的 Grok Bot 周额度）。旧缓存可能缺少此字段。
+    public let additionalWindows: [QuotaWindow]?
     /// 按模型划分的额度列表（如 Antigravity 各模型）。
     public let modelQuotas: [ModelQuota]
     /// 账单周期或汇总说明，可选。
@@ -98,6 +100,7 @@ public struct UsageSnapshot: Equatable, Codable, Sendable {
         planName: String? = nil,
         primaryWindow: QuotaWindow? = nil,
         secondaryWindow: QuotaWindow? = nil,
+        additionalWindows: [QuotaWindow] = [],
         modelQuotas: [ModelQuota] = [],
         billingSummary: String? = nil
     ) {
@@ -106,8 +109,14 @@ public struct UsageSnapshot: Equatable, Codable, Sendable {
         self.planName = planName
         self.primaryWindow = primaryWindow
         self.secondaryWindow = secondaryWindow
+        self.additionalWindows = additionalWindows.isEmpty ? nil : additionalWindows
         self.modelQuotas = modelQuotas
         self.billingSummary = billingSummary
+    }
+
+    /// 按显示顺序返回主窗口、次窗口和额外窗口。
+    public var quotaWindows: [QuotaWindow] {
+        [primaryWindow, secondaryWindow].compactMap { $0 } + (additionalWindows ?? [])
     }
 
     /// 判断快照是否已超过允许的新鲜度阈值。
@@ -117,16 +126,6 @@ public struct UsageSnapshot: Equatable, Codable, Sendable {
 
     /// 返回该快照中最高的已使用百分比，用于阈值提醒判断。
     public var highestUsedPercentage: Double? {
-        var values: [Double] = []
-        if let primaryWindow {
-            values.append(primaryWindow.usedPercentage)
-        }
-        if let secondaryWindow {
-            values.append(secondaryWindow.usedPercentage)
-        }
-        for model in modelQuotas {
-            values.append(model.usedPercentage)
-        }
-        return values.max()
+        (quotaWindows.map(\.usedPercentage) + modelQuotas.map(\.usedPercentage)).max()
     }
 }

@@ -27,10 +27,12 @@
   - **本地开发签名说明**：使用 ad-hoc 签名（`-`）时，每次重新编译都会改变二进制哈希（CDHash），macOS 钥匙串会将其视为新程序而重新弹出授权框；使用稳定的开发证书或正式发布签名后，点一次「始终允许」即可持久生效
 - **用量接口**：`POST https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage`（ConnectRPC 非官方接口，可能变化）
   - 请求头：`Authorization: Bearer <token>`、`Content-Type: application/json`、`Connect-Protocol-Version: 1`
+  - Grok Bot 周额度使用同一 Cursor 域名与登录态请求 `DashboardService/GetSandUsageStatus`。这是 Grok Bot 客户端使用的非官方接口，可能变化。请求失败时仍显示月度用量。
 - **字段映射**：
   - `planUsage.totalPercentUsed`（或 `includedSpend / limit`）→ 主窗口（本月总计，展示剩余百分比与 `billingCycleEnd`）
   - `planUsage.apiPercentUsed` → 次窗口（API 额度）
-- **单测与脱敏样本**：`CursorProviderTests.swift`、`cursor_usage_valid.json`
+  - `hasNonZeroIncludedLimit` 为真且非企业合用额度时，`usagePercent` 与 `nextResetTimestampUtc` → Grok Bot 周额度。周额度按接口返回的重置时间显示。
+- **单测与脱敏样本**：`CursorProviderTests.swift`、`cursor_usage_valid.json`、`cursor_grok_bot_weekly.json`
 
 ## 3. Antigravity (`AntigravityProvider`)
 

@@ -107,7 +107,7 @@ struct ProviderQuotaWidgetView: View {
 
     @ViewBuilder
     private func contentBody(snapshot: UsageSnapshot) -> some View {
-        let windows = [snapshot.primaryWindow, snapshot.secondaryWindow].compactMap { $0 }
+        let windows = snapshot.quotaWindows
         if windows.isEmpty {
             Spacer()
             Text(snapshot.billingSummary ?? "暂无额度明细")
@@ -124,16 +124,18 @@ struct ProviderQuotaWidgetView: View {
     @ViewBuilder
     private func ringBody(windows: [QuotaWindow]) -> some View {
         let isSmall = family == .systemSmall
+        let compact = isSmall && windows.count > 2
         Spacer(minLength: 0)
-        HStack(alignment: .top, spacing: isSmall ? 10 : 18) {
-            ForEach(windows.prefix(2)) { window in
+        HStack(alignment: .top, spacing: compact ? 5 : (isSmall ? 10 : 18)) {
+            ForEach(windows) { window in
                 QuotaRingMetricView(
                     title: shortWindowTitle(window),
                     badge: nil,
                     remainingPercentage: window.remainingPercentage,
                     resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
-                    ringSize: isSmall ? 50 : 64,
-                    lineWidth: isSmall ? 5.5 : 6.5
+                    ringSize: compact ? 35 : (isSmall ? 50 : 64),
+                    lineWidth: compact ? 4.5 : (isSmall ? 5.5 : 6.5),
+                    compactDate: compact
                 )
             }
         }
@@ -143,12 +145,15 @@ struct ProviderQuotaWidgetView: View {
     @ViewBuilder
     private func barBody(windows: [QuotaWindow]) -> some View {
         if family == .systemSmall {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(windows.prefix(2)) { window in
+            let compact = windows.count > 2
+            VStack(alignment: .leading, spacing: compact ? 5 : 10) {
+                ForEach(windows) { window in
+                    // 小号三行时只保留周额度与月度总用量各自的重置时间。
+                    let resetAt = compact && window.id == "monthly_api" ? nil : window.resetAt
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
-                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
+                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: resetAt, from: entry.date),
                         compact: true
                     )
                 }
@@ -157,7 +162,7 @@ struct ProviderQuotaWidgetView: View {
         } else {
             Spacer(minLength: 0)
             HStack(alignment: .top, spacing: 18) {
-                ForEach(windows.prefix(2)) { window in
+                ForEach(windows) { window in
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
@@ -180,6 +185,8 @@ struct ProviderQuotaWidgetView: View {
             "本月总计"
         case "monthly_api":
             "API 额度"
+        case "grok_bot_weekly" where family == .systemSmall:
+            String(localized: "Grok 周")
         default:
             window.label
         }
@@ -215,7 +222,7 @@ struct CursorQuotaWidget: Widget {
             ProviderQuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Cursor 额度")
-        .description("显示 Cursor 当前账单周期剩余额度，支持切换圆环或条形样式。")
+        .description("显示 Cursor 当前账单周期和 Grok Bot 周剩余额度，支持圆环或条形样式。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

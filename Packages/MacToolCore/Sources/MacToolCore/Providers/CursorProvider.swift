@@ -64,6 +64,26 @@ public struct CursorUsageParser: Sendable {
         )
     }
 
+    func parseGrokBotWeeklyWindow(data: Data) throws -> QuotaWindow? {
+        let usage: CursorGrokBotUsageResponse
+        do {
+            usage = try JSONDecoder().decode(CursorGrokBotUsageResponse.self, from: data)
+        } catch {
+            throw ProviderError.unsupportedFormat("无法解析 Cursor Grok Bot 周额度 JSON")
+        }
+        guard usage.usesPooledEnterpriseAllowance != true, usage.hasNonZeroIncludedLimit == true else {
+            return nil
+        }
+        guard let used = usage.usagePercent, used.isFinite, used >= 0 else {
+            throw ProviderError.unsupportedFormat("Cursor Grok Bot 响应缺少有效的周用量")
+        }
+        let resetAt = usage.nextResetTimestampUtc.flatMap { timestamp in
+            (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(timestamp))
+                ?? (try? Date.ISO8601FormatStyle().parse(timestamp))
+        }
+        return QuotaWindow(id: "grok_bot_weekly", label: "Grok Bot 周额度", usedPercentage: used, resetAt: resetAt)
+    }
+
     private func resolvePrimaryPercentage(_ planUsage: CursorPlanUsage) -> Double? {
         if let totalPercent = planUsage.totalPercentUsed {
             return totalPercent
@@ -83,7 +103,7 @@ public struct CursorUsageParser: Sendable {
         return String(format: "$%.2f / $%.2f", includedDollars, limitDollars)
     }
 
-    private func formatPlanName(_ rawMembership: String?) -> String? {
+    fileprivate func formatPlanName(_ rawMembership: String?) -> String? {
         guard let raw = rawMembership?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty
         else {
@@ -115,6 +135,10 @@ public struct CursorProvider: UsageProvider {
     public static let usageEndpoint = URL(
         string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
     )
+    /// Grok Bot 客户端使用的 Cursor DashboardService 非官方 RPC，响应结构可能变化。
+    private static let grokBotWeeklyEndpoint = URL(
+        string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus"
+    )
 
     public let id: ProviderID = .cursor
 
@@ -145,11 +169,60 @@ public struct CursorProvider: UsageProvider {
         guard let endpoint = Self.usageEndpoint else {
             throw ProviderError.invalidResponse("Cursor 接口地址配置无效")
         }
+        let fetchedAt = nowProvider()
+        let monthly: Result<UsageSnapshot, ProviderError>
+        do {
+            let data = try await fetchData(from: endpoint, accessToken: credential.accessToken)
+            monthly = try .success(parser.parse(
+                data: data,
+                membershipType: credential.membershipType,
+                fetchedAt: fetchedAt
+            ))
+        } catch let error as ProviderError {
+            switch error {
+            case .unsupportedFormat, .invalidResponse("HTTP 400"):
+                // 没有月额度的订阅也可以单独返回周额度。
+                monthly = .failure(error)
+            default:
+                throw error
+            }
+        }
+        guard let weeklyWindow = try await fetchWeeklyWindow(accessToken: credential.accessToken) else {
+            return try monthly.get()
+        }
+        let snapshot = try? monthly.get()
+        return UsageSnapshot(
+            provider: .cursor,
+            fetchedAt: fetchedAt,
+            planName: snapshot?.planName ?? parser.formatPlanName(credential.membershipType),
+            primaryWindow: snapshot?.primaryWindow,
+            secondaryWindow: snapshot?.secondaryWindow,
+            additionalWindows: [weeklyWindow],
+            billingSummary: snapshot?.billingSummary
+        )
+    }
 
-        var request = URLRequest(url: endpoint)
+    private func fetchWeeklyWindow(accessToken: String) async throws -> QuotaWindow? {
+        guard let weeklyEndpoint = Self.grokBotWeeklyEndpoint else {
+            return nil
+        }
+        do {
+            let data = try await fetchData(from: weeklyEndpoint, accessToken: accessToken, timeout: 5)
+            try Task.checkCancellation()
+            return try parser.parseGrokBotWeeklyWindow(data: data)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            try Task.checkCancellation()
+            return nil
+        }
+    }
+
+    private func fetchData(from endpoint: URL, accessToken: String, timeout: TimeInterval = 15) async throws -> Data {
+        var request = URLRequest(url: endpoint, timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.httpBody = Data("{}".utf8)
-        request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("1", forHTTPHeaderField: "Connect-Protocol-Version")
         request.setValue("mac_tool/0.1", forHTTPHeaderField: "User-Agent")
@@ -158,25 +231,29 @@ public struct CursorProvider: UsageProvider {
         let response: HTTPURLResponse
         do {
             (data, response) = try await httpClient.data(for: request)
-        } catch let error as ProviderError {
-            throw error
         } catch {
+            if error is ProviderError || error is CancellationError {
+                throw error
+            }
             throw ProviderError.networkFailure(error.localizedDescription)
         }
 
         switch response.statusCode {
         case 200 ... 299:
-            return try parser.parse(
-                data: data,
-                membershipType: credential.membershipType,
-                fetchedAt: nowProvider()
-            )
+            return data
         case 401, 403:
             throw ProviderError.unauthorized
         default:
             throw ProviderError.invalidResponse("HTTP \(response.statusCode)")
         }
     }
+}
+
+private struct CursorGrokBotUsageResponse: Decodable {
+    let usagePercent: Double?
+    let nextResetTimestampUtc: String?
+    let hasNonZeroIncludedLimit: Bool?
+    let usesPooledEnterpriseAllowance: Bool?
 }
 
 private struct CursorPeriodUsageResponse: Decodable {
