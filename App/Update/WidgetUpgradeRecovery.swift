@@ -74,7 +74,7 @@ enum WidgetUpgradeRecovery {
         // A registration can immediately prompt WidgetKit to request a new timeline.
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(1))
-        while matchingPIDs.contains(where: { isWidgetProcess($0, name: name, path: path) }) {
+        while matchingPIDs.contains(where: { kill($0, 0) == 0 || errno == EPERM }) {
             guard clock.now < deadline, !Task.isCancelled else {
                 return false
             }

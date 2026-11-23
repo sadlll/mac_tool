@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 
@@ -33,7 +34,10 @@ final class WidgetUpgradeRecoveryTests: XCTestCase {
                 defaults: defaults
             ) { url in
                 XCTAssertEqual(url, extensionURL)
-                XCTAssertFalse(oldProcess.isRunning)
+                let oldProcessStatus = kill(oldProcess.processIdentifier, 0)
+                let oldProcessError = errno
+                XCTAssertEqual(oldProcessStatus, -1)
+                XCTAssertEqual(oldProcessError, ESRCH)
                 XCTAssertTrue(otherProcess.isRunning)
                 registrations += 1
                 return registrations > 1
