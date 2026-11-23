@@ -16,6 +16,7 @@ build/
 Package.resolved
 
 # 发布产物
+dist/
 *.dmg
 *.zip
 *.xcarchive

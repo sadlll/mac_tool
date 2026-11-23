@@ -31,7 +31,7 @@
   - 文件：`project.yml`（新增 Sparkle 2 SPM 依赖）、`App/Update/UpdateController.swift`、`App/MacToolApp.swift`（菜单栏增加「检查更新…」）、`App/Settings/SettingsView.swift`（新增「更新」设置页）、`App/Info.plist`（`SUFeedURL`、`SUPublicEDKey`）
   - 要点：仅使用 `SPUStandardUpdaterController`；默认每 24 小时检查一次，仅推稳定版，禁止关闭 EdDSA 校验
   - 验证：`xcodegen generate && xcodebuild -project mac_tool.xcodeproj -scheme mac_tool build` + `swiftlint --strict`
-- [ ] **Task 8 — GitHub Releases 自动发布与 appcast 生成流水线**
+- [x] **Task 8 — GitHub Releases 自动发布与 appcast 生成流水线**
   - 文件：`.github/workflows/release.yml`、`Scripts/release.sh`
   - 要点：仅在维护者推送 `v*` Tag 时触发；构建 Release `.dmg`、使用 `SPARKLE_PRIVATE_KEY` Secret 签名、生成 `appcast.xml` 并上传 GitHub Release；支持 `workflow_dispatch` dry-run 演练
   - 验证：触发 `workflow_dispatch`（dry-run）检查产物结构与签名步骤

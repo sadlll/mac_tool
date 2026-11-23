@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "演练版本号（例如 0.1.0）"
+        required: true
+        default: "0.1.0"
+      dry_run:
+        description: "仅演练构建与签名，不创建 GitHub Release"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Sign & Publish Release
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version metadata
+        id: meta
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+            DRY_RUN="false"
+          else
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+            DRY_RUN="${{ inputs.dry_run }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test MacToolCore
+        run: swift test --package-path Packages/MacToolCore
+
+      - name: Build DMG and signed Sparkle appcast
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          chmod +x Scripts/release.sh
+          ./Scripts/release.sh
+
+      - name: Upload release artifacts (preview)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac_tool-${{ steps.meta.outputs.tag }}
+          path: |
+            dist/*.dmg
+            dist/appcast.xml
+
+      - name: Publish GitHub Release
+        if: steps.meta.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          DMG="dist/mac_tool-${VERSION}.dmg"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" dist/appcast.xml --clobber
+          else
+            gh release create "$TAG" "$DMG" dist/appcast.xml \
+              --title "mac_tool ${TAG}" \
+              --generate-notes
+          fi
