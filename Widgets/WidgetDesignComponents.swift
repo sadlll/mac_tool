@@ -122,7 +122,7 @@ struct WidgetPalette: DynamicProperty {
 
 /// 临近重置时使用 WidgetKit 倒计时，较远时显示本地重置时间。
 struct WidgetResetCountdown: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     let interval: ClosedRange<Date>?
     var stacked = false
@@ -167,7 +167,7 @@ struct WidgetResetCountdown: View {
 
 /// 统一的小组件顶部标题栏。
 struct WidgetHeaderBar: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     let provider: ProviderID
     let planName: String?
@@ -196,7 +196,7 @@ struct WidgetHeaderBar: View {
 
 /// 精致的圆环进度组件（居中显示剩余百分比）。
 struct QuotaRingMetricView: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     let title: String
     let badge: String?
@@ -250,7 +250,7 @@ struct QuotaRingMetricView: View {
 
 /// 参考 Codex 官方风格的条形指标卡（大号剩余百分比 + 粗圆角进度条 + 重置倒计时）。
 struct CodexStyleBarMetricView: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     let title: String
     let remainingPercentage: Double
@@ -299,7 +299,7 @@ struct CodexStyleBarMetricView: View {
 
 /// 粗圆角胶囊进度条。
 struct CapsuleProgressBar: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     let fraction: Double
     let color: Color

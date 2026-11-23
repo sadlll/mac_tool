@@ -92,7 +92,7 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
 }
 
 struct AntigravityQuotaWidgetView: View {
-    private var palette = WidgetPalette()
+    private let palette = WidgetPalette()
 
     @Environment(\.widgetFamily) private var family
     let entry: AntigravityQuotaEntry
