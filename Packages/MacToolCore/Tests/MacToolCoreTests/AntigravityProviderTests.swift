@@ -33,6 +33,34 @@ private struct MockAntigravityHTTPClient: HTTPClient {
     }
 }
 
+private actor SuspendedAntigravityHTTPClient: HTTPClient {
+    let requestStarted: XCTestExpectation
+    private(set) var attempts = 0
+    private var firstRequest: CheckedContinuation<Void, Never>?
+    private var firstRequestFinished = false
+
+    init(requestStarted: XCTestExpectation) {
+        self.requestStarted = requestStarted
+    }
+
+    func data(for _: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        attempts += 1
+        if attempts == 1, !firstRequestFinished {
+            await withCheckedContinuation {
+                firstRequest = $0
+                requestStarted.fulfill()
+            }
+        }
+        throw URLError(.cancelled)
+    }
+
+    func finishFirstRequest() {
+        firstRequestFinished = true
+        firstRequest?.resume()
+        firstRequest = nil
+    }
+}
+
 final class AntigravityProviderTests: XCTestCase {
     func testLocalDaemonReaderDiscoversValidJsonFiles() throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -142,6 +170,30 @@ final class AntigravityProviderTests: XCTestCase {
         } catch {
             XCTFail("非预期错误：\(error)")
         }
+    }
+
+    func testCancelledFetchDoesNotTryAnotherDaemon() async {
+        let began = XCTestExpectation(description: "First daemon request began")
+        let client = SuspendedAntigravityHTTPClient(requestStarted: began)
+        let provider = AntigravityProvider(
+            daemonDiscoverer: MockDaemonDiscoverer(daemons: [
+                AntigravityDaemonInfo(httpPort: 40001, csrfToken: "mock-a"),
+                AntigravityDaemonInfo(httpPort: 40002, csrfToken: "mock-b"),
+            ]),
+            httpClient: client
+        )
+        let fetch = Task { try await provider.fetchUsage() }
+        await fulfillment(of: [began], timeout: 2)
+        fetch.cancel()
+        await client.finishFirstRequest()
+
+        if case let .failure(error) = await fetch.result {
+            XCTAssertTrue(error is CancellationError)
+        } else {
+            XCTFail("Expected cancellation")
+        }
+        let attempts = await client.attempts
+        XCTAssertEqual(attempts, 1)
     }
 
     private func loadFixture(_ filename: String) throws -> Data {
