@@ -81,24 +81,45 @@ enum WidgetStyleHelper {
     }
 }
 
-/// WidgetKit 负责更新倒计时，并在达到重置时刻时停在零。
+/// 临近重置时使用 WidgetKit 倒计时，较远时显示本地重置时间。
 struct WidgetResetCountdown: View {
     let interval: ClosedRange<Date>?
+    var stacked = false
 
     var body: some View {
         if let interval {
-            HStack(spacing: 3) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .accessibilityLabel("距额度重置")
-                Text(timerInterval: interval, pauseTime: interval.upperBound)
-                    .monospacedDigit()
-                    .multilineTextAlignment(.leading)
-                    .frame(width: 54, alignment: .leading)
+            let usesTimer = interval.upperBound.timeIntervalSince(interval.lowerBound) <= 3600
+            let label: LocalizedStringKey = usesTimer ? "距重置" : "重置于"
+
+            Group {
+                if stacked {
+                    VStack(spacing: 1) {
+                        Text(label)
+                        resetTime(interval, usesTimer: usesTimer)
+                    }
+                } else {
+                    HStack(spacing: 3) {
+                        Text(label)
+                        resetTime(interval, usesTimer: usesTimer)
+                    }
+                }
             }
-            .font(.system(size: 10))
+            .font(.system(size: 10).monospacedDigit())
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .accessibilityElement(children: .combine)
+        }
+    }
+
+    @ViewBuilder
+    private func resetTime(_ interval: ClosedRange<Date>, usesTimer: Bool) -> some View {
+        if usesTimer {
+            Text(timerInterval: interval, pauseTime: interval.upperBound, showsHours: false)
+                .multilineTextAlignment(stacked ? .center : .leading)
+                .frame(width: 32, alignment: stacked ? .center : .leading)
+        } else {
+            Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day().hour().minute())
         }
     }
 }
@@ -175,7 +196,7 @@ struct QuotaRingMetricView: View {
                 }
             }
 
-            WidgetResetCountdown(interval: resetInterval)
+            WidgetResetCountdown(interval: resetInterval, stacked: true)
         }
         .frame(maxWidth: .infinity)
     }

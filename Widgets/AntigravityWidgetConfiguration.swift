@@ -132,9 +132,7 @@ struct AntigravityQuotaWidgetView: View {
                     title: parts.name,
                     badge: parts.badge,
                     remainingPercentage: model.remainingPercentage,
-                    resetInterval: isSmall
-                        ? nil
-                        : WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
+                    resetInterval: WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
                     ringSize: isSmall ? 48 : 54,
                     lineWidth: isSmall ? 5 : 5.5
                 )
