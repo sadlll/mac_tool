@@ -30,7 +30,7 @@ xcodebuild \
 
 APP_PATH="$DERIVED_DATA/Build/Products/Release/mac_tool.app"
 
-echo "==> 校验应用和小组件的版本与架构..."
+echo "==> 校验应用和小组件的版本、架构与 SDK..."
 for BUNDLE_PATH in "$APP_PATH" "$APP_PATH/Contents/PlugIns/MacToolWidgets.appex"; do
   INFO_PLIST="$BUNDLE_PATH/Contents/Info.plist"
   BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
@@ -41,11 +41,21 @@ for BUNDLE_PATH in "$APP_PATH" "$APP_PATH/Contents/PlugIns/MacToolWidgets.appex"
   fi
 
   EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST")"
-  ARCHITECTURES="$(xcrun lipo -archs "$BUNDLE_PATH/Contents/MacOS/$EXECUTABLE")"
+  EXECUTABLE_PATH="$BUNDLE_PATH/Contents/MacOS/$EXECUTABLE"
+  ARCHITECTURES="$(xcrun lipo -archs "$EXECUTABLE_PATH")"
   if [[ "$ARCHITECTURES" != "arm64" ]]; then
     echo "错误：${BUNDLE_PATH##*/} 架构为 ${ARCHITECTURES}，预期 arm64" >&2
     exit 1
   fi
+
+  # macOS 26 SDK 及更新版本构建的小组件可使用桌面的 Liquid Glass 渲染。
+  SDK_VERSION="$(xcrun vtool -show-build "$EXECUTABLE_PATH" | awk '$1 == "sdk" {print $2}')"
+  SDK_MAJOR="${SDK_VERSION%%.*}"
+  if [[ ! "$SDK_MAJOR" =~ ^[0-9]+$ ]] || (( SDK_MAJOR < 26 )); then
+    echo "错误：${BUNDLE_PATH##*/} 使用的 SDK 为 ${SDK_VERSION:-未知}，要求 macOS SDK 26 或更新版本" >&2
+    exit 1
+  fi
+  echo "${BUNDLE_PATH##*/} 使用 macOS SDK ${SDK_VERSION}"
 done
 
 DMG_NAME="mac_tool-${VERSION}.dmg"
