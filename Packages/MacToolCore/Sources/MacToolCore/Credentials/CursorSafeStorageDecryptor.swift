@@ -27,7 +27,10 @@ public struct SystemKeychainPasswordReader: KeychainPasswordReader {
               let data = result as? Data,
               let password = String(data: data, encoding: .utf8)
         else {
-            throw ProviderError.credentialInvalid("无法从系统钥匙串读取 \(service)（状态码 \(status)）")
+            let retryMessage = String(localized: "请退出并重新打开 mac_tool 后重试。")
+            throw ProviderError.credentialInvalid(
+                "无法从系统钥匙串读取 \(service)（状态码 \(status)）。\(retryMessage)"
+            )
         }
         return password.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -47,13 +50,15 @@ public struct CursorSafeStorageDecryptor: Sendable {
     private static let aesKeyLength = 16
     private static let aesIV = Data(repeating: 0x20, count: kCCBlockSizeAES128)
     private static let v10Header = Data("v10".utf8)
+    private static let systemKeyCache = InMemoryDerivedKeyCache()
 
     private let keychainReader: any KeychainPasswordReader
-    private let keyCache = InMemoryDerivedKeyCache()
+    private let keyCache: InMemoryDerivedKeyCache
 
     /// 初始化 Cursor Safe Storage 解密器。
     public init(keychainReader: any KeychainPasswordReader = SystemKeychainPasswordReader()) {
         self.keychainReader = keychainReader
+        keyCache = keychainReader is SystemKeychainPasswordReader ? Self.systemKeyCache : InMemoryDerivedKeyCache()
     }
 
     /// 判断原始字符串是否为新版加密格式。
@@ -62,7 +67,7 @@ public struct CursorSafeStorageDecryptor: Sendable {
     }
 
     /// 解密 `cursor-safe-storage:v1:<base64>` 字符串；若已是明文则原样返回。
-    /// 主密钥派生结果仅缓存在内存中，避免定时轮询反复触发系统钥匙串读取。
+    /// 主密钥派生结果或读取错误仅缓存在内存中，避免定时轮询反复触发系统钥匙串读取。
     public func decryptIfNeeded(_ rawValue: String) throws -> String {
         guard Self.isEncrypted(rawValue) else {
             return rawValue
@@ -83,16 +88,13 @@ public struct CursorSafeStorageDecryptor: Sendable {
     }
 
     private func resolveCachedKey() throws -> Data {
-        if let cached = keyCache.get() {
-            return cached
+        try keyCache.getOrResolve {
+            let password = try keychainReader.readGenericPassword(
+                service: Self.keychainService,
+                account: Self.keychainAccount
+            )
+            return try deriveKey(from: password)
         }
-        let password = try keychainReader.readGenericPassword(
-            service: Self.keychainService,
-            account: Self.keychainAccount
-        )
-        let derived = try deriveKey(from: password)
-        keyCache.set(derived)
-        return derived
     }
 
     private func decryptBlob(_ blob: Data, key: Data) throws -> String {
@@ -172,20 +174,19 @@ public struct CursorSafeStorageDecryptor: Sendable {
     }
 }
 
-/// 进程内派生密钥缓存（仅驻留内存，随进程退出销毁）。
+/// 进程内派生密钥或失败缓存（仅驻留内存，随进程退出销毁）。
 private final class InMemoryDerivedKeyCache: @unchecked Sendable {
     private let lock = NSLock()
-    private var key: Data?
+    private var resolution: Result<Data, Error>?
 
-    func get() -> Data? {
-        lock.lock()
-        defer { lock.unlock() }
-        return key
-    }
-
-    func set(_ newKey: Data) {
-        lock.lock()
-        defer { lock.unlock() }
-        key = newKey
+    func getOrResolve(_ resolve: () throws -> Data) throws -> Data {
+        try lock.withLock {
+            if let resolution {
+                return try resolution.get()
+            }
+            let resolution = Result(catching: resolve)
+            self.resolution = resolution
+            return try resolution.get()
+        }
     }
 }
