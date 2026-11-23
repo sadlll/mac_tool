@@ -6,6 +6,7 @@
 
 - **禁止本地手动发布**：安装包（`.dmg`）、Sparkle `appcast.xml` 与 EdDSA 签名均由 GitHub Actions 发布流水线生成并上传。
 - **只发布稳定版**：不设 Beta 通道。
+- **适用设备**：发行包仅支持 Apple Silicon（arm64）。CI 打包前检查主应用和小组件的架构与版本号。
 - **禁止 AI 推送 Tag**：打 `vX.Y.Z` Tag 触发发布只能由维护者手动执行。
 
 ## Sparkle 2 密钥管理

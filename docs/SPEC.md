@@ -17,7 +17,7 @@
 
 ### 1.3 运行环境
 - 操作系统：macOS 14.0 Sonoma 及以上（桌面小组件、SwiftUI `MenuBarExtra`、Observation、`AppIntents`）
-- 架构：Apple Silicon / Intel
+- 架构：Apple Silicon（arm64）
 - 语言：界面与文档全中文
 
 ---
