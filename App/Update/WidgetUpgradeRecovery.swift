@@ -4,7 +4,7 @@ import os
 
 @MainActor
 enum WidgetUpgradeRecovery {
-    private static let buildKey = "registeredWidgetBuild"
+    private static let buildsKey = "registeredWidgetBuilds"
     private static let logger = Logger(subsystem: "com.sadlll.mac-tool", category: "widget-upgrade")
 
     static func refreshInstalledWidget() async {
@@ -27,8 +27,9 @@ enum WidgetUpgradeRecovery {
         defaults: UserDefaults,
         register: (URL) async -> Bool
     ) async {
-        let registration = "\(build):\(extensionURL.path)"
-        guard defaults.string(forKey: buildKey) != registration,
+        let path = extensionURL.resolvingSymlinksInPath().path
+        let registeredBuilds = defaults.dictionary(forKey: buildsKey) as? [String: String] ?? [:]
+        guard registeredBuilds[path] != build,
               let executable = Bundle(url: extensionURL)?.executableURL
         else {
             return
@@ -39,7 +40,9 @@ enum WidgetUpgradeRecovery {
             logger.error("Could not refresh WidgetKit registration after an update.")
             return
         }
-        defaults.set(registration, forKey: buildKey)
+        var updatedBuilds = defaults.dictionary(forKey: buildsKey) as? [String: String] ?? [:]
+        updatedBuilds[path] = build
+        defaults.set(updatedBuilds, forKey: buildsKey)
     }
 
     private static func stopWidgetProcesses(at executable: URL) async -> Bool {
@@ -106,20 +109,25 @@ enum WidgetUpgradeRecovery {
     }
 
     private static func registerExtension(at url: URL) async -> Bool {
-        await withCheckedContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
-            process.arguments = ["-a", url.path]
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            process.terminationHandler = { completed in
-                continuation.resume(returning: completed.terminationStatus == 0)
-            }
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(returning: false)
-            }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
+        process.arguments = ["-a", url.path]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return false
         }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(3))
+        while process.isRunning {
+            guard clock.now < deadline, !Task.isCancelled else {
+                process.terminate()
+                return false
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return process.terminationStatus == 0
     }
 }

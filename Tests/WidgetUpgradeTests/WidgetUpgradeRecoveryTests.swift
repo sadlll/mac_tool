@@ -9,22 +9,9 @@ final class WidgetUpgradeRecoveryTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let extensionURL = root.appendingPathComponent("MacToolWidgets.appex")
-        let contentsURL = extensionURL.appendingPathComponent("Contents")
-        let executable = contentsURL.appendingPathComponent("MacOS/WidgetFixture")
-        try FileManager.default.createDirectory(
-            at: executable.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
         let otherExecutable = root.appendingPathComponent("WidgetFixture")
         try buildFixture(at: otherExecutable)
-        try FileManager.default.copyItem(at: otherExecutable, to: executable)
-        let plist = [
-            "CFBundleIdentifier": "test.mac-tool.widgets",
-            "CFBundlePackageType": "XPC!",
-            "CFBundleExecutable": executable.lastPathComponent,
-        ]
-        let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-        try plistData.write(to: contentsURL.appendingPathComponent("Info.plist"))
+        let executable = try makeBundle(at: extensionURL, using: otherExecutable)
 
         let otherProcess = try runFixture(at: otherExecutable)
         defer { stopFixture(otherProcess) }
@@ -53,6 +40,40 @@ final class WidgetUpgradeRecoveryTests: XCTestCase {
             }
         }
         XCTAssertEqual(registrations, 2)
+
+        let otherExtension = root.appendingPathComponent("Other/MacToolWidgets.appex")
+        try FileManager.default.createDirectory(
+            at: otherExtension.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: extensionURL, to: otherExtension)
+        await WidgetUpgradeRecovery.refresh(extensionURL: otherExtension, build: "2", defaults: defaults) { _ in
+            registrations += 1
+            return true
+        }
+        await WidgetUpgradeRecovery.refresh(extensionURL: extensionURL, build: "2", defaults: defaults) { _ in
+            XCTFail("The first installation already registered this build")
+            return true
+        }
+        XCTAssertEqual(registrations, 3)
+    }
+
+    private func makeBundle(at extensionURL: URL, using fixture: URL) throws -> URL {
+        let contentsURL = extensionURL.appendingPathComponent("Contents")
+        let executable = contentsURL.appendingPathComponent("MacOS/WidgetFixture")
+        try FileManager.default.createDirectory(
+            at: executable.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: fixture, to: executable)
+        let plist = [
+            "CFBundleIdentifier": "test.mac-tool.widgets",
+            "CFBundlePackageType": "XPC!",
+            "CFBundleExecutable": executable.lastPathComponent,
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try data.write(to: contentsURL.appendingPathComponent("Info.plist"))
+        return executable
     }
 
     private func buildFixture(at url: URL) throws {
