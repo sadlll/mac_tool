@@ -159,22 +159,32 @@ struct AntigravityQuotaWidgetView: View {
     @ViewBuilder
     private func ringBody() -> some View {
         let isSmall = family == .systemSmall
-        let visible = entry.visibleModels(limit: isSmall ? 2 : 4)
-        Spacer(minLength: 0)
-        HStack(alignment: .top, spacing: isSmall ? 8 : 10) {
-            ForEach(visible) { model in
-                let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
-                QuotaRingMetricView(
-                    title: parts.name,
-                    badge: parts.badge,
-                    remainingPercentage: model.remainingPercentage,
-                    resetInterval: WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
-                    ringSize: isSmall ? 48 : 54,
-                    lineWidth: isSmall ? 5 : 5.5
-                )
+        let visible = entry.visibleModels(limit: isSmall ? 2 : 5)
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(alignment: .top, spacing: isSmall ? 8 : 10) {
+                ForEach(visible.prefix(4)) { model in
+                    let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
+                    QuotaRingMetricView(
+                        title: parts.name,
+                        badge: parts.badge,
+                        remainingPercentage: model.remainingPercentage,
+                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
+                        ringSize: isSmall ? 48 : 54,
+                        lineWidth: isSmall ? 5 : 5.5
+                    )
+                }
+            }
+            Spacer(minLength: 0)
+            if let fifth = visible.dropFirst(4).first {
+                VStack(spacing: 5) {
+                    Rectangle()
+                        .fill(palette.progressTrack)
+                        .frame(height: 1)
+                    bucketSummary(fifth, showReset: true)
+                }
             }
         }
-        Spacer(minLength: 0)
     }
 
     @ViewBuilder
@@ -190,35 +200,39 @@ struct AntigravityQuotaWidgetView: View {
     }
 
     private func compactBucketBarRow(_ model: ModelQuota, showReset: Bool) -> some View {
-        let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
         let color = palette.progressColor(for: model.remainingPercentage)
 
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(parts.name)
-                    .foregroundStyle(palette.primary)
-                    .font(.caption2.weight(.medium))
-                    .lineLimit(1)
-                if let badge = parts.badge {
-                    Text(badge)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(palette.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 0.5)
-                        .background(palette.badgeBackground, in: Capsule())
-                }
-                Spacer(minLength: 4)
-                Text("\(Int(model.remainingPercentage.rounded()))%")
-                    .font(.caption2.bold().monospacedDigit())
-                    .foregroundStyle(palette.percentageStyle(for: model.remainingPercentage))
-                if showReset {
-                    WidgetResetCountdown(interval: WidgetStyleHelper.resetInterval(
-                        endingAt: model.resetAt,
-                        from: entry.date
-                    ))
-                }
-            }
+            bucketSummary(model, showReset: showReset)
             CapsuleProgressBar(fraction: model.remainingPercentage / 100.0, color: color, height: 4.5)
+        }
+    }
+
+    private func bucketSummary(_ model: ModelQuota, showReset: Bool) -> some View {
+        let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
+        return HStack(spacing: 4) {
+            Text(parts.name)
+                .foregroundStyle(palette.primary)
+                .font(.caption2.weight(.medium))
+                .lineLimit(1)
+            if let badge = parts.badge {
+                Text(badge)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(palette.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 0.5)
+                    .background(palette.badgeBackground, in: Capsule())
+            }
+            Spacer(minLength: 4)
+            Text("\(Int(model.remainingPercentage.rounded()))%")
+                .font(.caption2.bold().monospacedDigit())
+                .foregroundStyle(palette.percentageStyle(for: model.remainingPercentage))
+            if showReset {
+                WidgetResetCountdown(interval: WidgetStyleHelper.resetInterval(
+                    endingAt: model.resetAt,
+                    from: entry.date
+                ))
+            }
         }
     }
 }
