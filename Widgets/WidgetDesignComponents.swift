@@ -1,6 +1,7 @@
 import AppIntents
 import MacToolCore
 import SwiftUI
+import WidgetKit
 
 /// 小组件展示样式选项（可在桌面右键 →「编辑小组件」中切换）。
 enum WidgetDisplayStyle: String, AppEnum {
@@ -81,8 +82,48 @@ enum WidgetStyleHelper {
     }
 }
 
+/// 为全彩和桌面单色渲染提供一致的文字层级与进度对比度。
+struct WidgetPalette: DynamicProperty {
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var isFullColor: Bool {
+        renderingMode == .fullColor
+    }
+
+    var primary: AnyShapeStyle {
+        isFullColor ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.white)
+    }
+
+    var secondary: AnyShapeStyle {
+        isFullColor ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.white.opacity(0.75))
+    }
+
+    var badgeBackground: AnyShapeStyle {
+        isFullColor ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Color.white.opacity(0.18))
+    }
+
+    var containerBackground: AnyShapeStyle {
+        // 在玻璃外观下，由 WidgetKit 提供底板和对比度。
+        isFullColor ? AnyShapeStyle(.fill.tertiary) : AnyShapeStyle(Color.clear)
+    }
+
+    var progressTrack: Color {
+        isFullColor ? Color.primary.opacity(0.10) : Color.white.opacity(0.25)
+    }
+
+    func progressColor(for remainingPercentage: Double) -> Color {
+        isFullColor ? WidgetStyleHelper.remainingColor(for: remainingPercentage) : .white
+    }
+
+    func percentageStyle(for remainingPercentage: Double) -> AnyShapeStyle {
+        isFullColor && remainingPercentage <= 5 ? AnyShapeStyle(Color.red) : primary
+    }
+}
+
 /// 临近重置时使用 WidgetKit 倒计时，较远时显示本地重置时间。
 struct WidgetResetCountdown: View {
+    private let palette = WidgetPalette()
+
     let interval: ClosedRange<Date>?
     var stacked = false
 
@@ -105,7 +146,7 @@ struct WidgetResetCountdown: View {
                 }
             }
             .font(.system(size: 10).monospacedDigit())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette.secondary)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .accessibilityElement(children: .combine)
@@ -126,6 +167,8 @@ struct WidgetResetCountdown: View {
 
 /// 统一的小组件顶部标题栏。
 struct WidgetHeaderBar: View {
+    private let palette = WidgetPalette()
+
     let provider: ProviderID
     let planName: String?
 
@@ -133,18 +176,19 @@ struct WidgetHeaderBar: View {
         HStack(spacing: 5) {
             Image(systemName: WidgetStyleHelper.symbolName(for: provider))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(palette.primary)
             Text(provider.displayName)
+                .foregroundStyle(palette.primary)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
             Spacer(minLength: 4)
             if let planName {
                 Text(planName)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.quaternary, in: Capsule())
+                    .background(palette.badgeBackground, in: Capsule())
             }
         }
     }
@@ -152,6 +196,8 @@ struct WidgetHeaderBar: View {
 
 /// 精致的圆环进度组件（居中显示剩余百分比）。
 struct QuotaRingMetricView: View {
+    private let palette = WidgetPalette()
+
     let title: String
     let badge: String?
     let remainingPercentage: Double
@@ -161,12 +207,12 @@ struct QuotaRingMetricView: View {
 
     var body: some View {
         let clamped = min(max(remainingPercentage, 0), 100)
-        let color = WidgetStyleHelper.remainingColor(for: clamped)
+        let color = palette.progressColor(for: clamped)
 
         VStack(spacing: 5) {
             ZStack {
                 Circle()
-                    .stroke(Color.primary.opacity(0.10), lineWidth: lineWidth)
+                    .stroke(palette.progressTrack, lineWidth: lineWidth)
                 Circle()
                     .trim(from: 0, to: clamped / 100.0)
                     .stroke(
@@ -177,22 +223,22 @@ struct QuotaRingMetricView: View {
                 Text("\(Int(clamped.rounded()))%")
                     .font(.system(size: ringSize * 0.27, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(clamped <= 5 ? .red : .primary)
+                    .foregroundStyle(palette.percentageStyle(for: clamped))
             }
             .frame(width: ringSize, height: ringSize)
 
             HStack(spacing: 3) {
                 Text(title)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(palette.primary)
                     .lineLimit(1)
                 if let badge {
                     Text(badge)
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(.quaternary, in: Capsule())
+                        .background(palette.badgeBackground, in: Capsule())
                 }
             }
 
@@ -204,6 +250,8 @@ struct QuotaRingMetricView: View {
 
 /// 参考 Codex 官方风格的条形指标卡（大号剩余百分比 + 粗圆角进度条 + 重置倒计时）。
 struct CodexStyleBarMetricView: View {
+    private let palette = WidgetPalette()
+
     let title: String
     let remainingPercentage: Double
     let resetInterval: ClosedRange<Date>?
@@ -211,33 +259,33 @@ struct CodexStyleBarMetricView: View {
 
     var body: some View {
         let clamped = min(max(remainingPercentage, 0), 100)
-        let color = WidgetStyleHelper.remainingColor(for: clamped)
+        let color = palette.progressColor(for: clamped)
 
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
             if compact {
                 HStack(alignment: .firstTextBaseline) {
                     Text(title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Text("\(Int(clamped.rounded()))% 剩余")
                         .font(.subheadline.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(palette.primary)
                 }
             } else {
                 Text(title)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette.secondary)
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(Int(clamped.rounded()))%")
                         .font(.system(size: 26, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(palette.primary)
                     Text("剩余")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.secondary)
                 }
             }
 
@@ -251,6 +299,8 @@ struct CodexStyleBarMetricView: View {
 
 /// 粗圆角胶囊进度条。
 struct CapsuleProgressBar: View {
+    private let palette = WidgetPalette()
+
     let fraction: Double
     let color: Color
     let height: CGFloat
@@ -260,7 +310,7 @@ struct CapsuleProgressBar: View {
             let clamped = min(max(fraction, 0), 1)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.primary.opacity(0.10))
+                    .fill(palette.progressTrack)
                 Capsule()
                     .fill(color)
                     .frame(width: max(clamped > 0 ? height : 0, proxy.size.width * clamped))
