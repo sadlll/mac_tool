@@ -61,16 +61,13 @@ enum WidgetStyleHelper {
         let hours = (seconds % 86400) / 3600
         let minutes = (seconds % 3600) / 60
 
-        if days >= 2 {
-            return "\(days) 天后重置"
-        }
-        if days == 1 {
-            return hours > 0 ? "1 天 \(hours) 小时后重置" : "1 天后重置"
+        if days >= 1 {
+            return "\(days)天后重置"
         }
         if hours >= 1 {
-            return minutes > 0 ? "\(hours) 小时 \(minutes) 分后重置" : "\(hours) 小时后重置"
+            return "\(hours)小时后重置"
         }
-        return "\(max(1, minutes)) 分钟后重置"
+        return "\(max(1, minutes))分钟后重置"
     }
 
     /// 将 Antigravity 较长的分桶名称拆分为简洁名称与窗口标签（如 `5h` / `周`），避免截断。
@@ -80,7 +77,7 @@ enum WidgetStyleHelper {
         let badge = parts.count > 1 ? parts[1] : nil
 
         let shortTitle = rawTitle
-            .replacingOccurrences(of: "Claude and GPT models", with: "Claude/GPT")
+            .replacingOccurrences(of: "Claude and GPT models", with: "Claude")
             .replacingOccurrences(of: "Gemini Models", with: "Gemini")
             .replacingOccurrences(of: " Models", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
