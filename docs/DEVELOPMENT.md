@@ -50,6 +50,11 @@ swiftlint --strict
    ```
 
 4. 如果修改了小组件配置意图（`AppIntentConfiguration`）后桌面旧卡片没有立即更新，删除桌面上的旧卡片再重新添加一次即可。
+5. 验证发布包升级时，保留桌面上的旧版小组件，更新主应用后检查已添加的组件和组件库预览。正式版在新构建首次启动时会停止本安装路径的旧扩展进程并重新注册。用以下命令运行无账号的回归测试：
+
+   ```bash
+   xcodebuild -project mac_tool.xcodeproj -scheme mac_tool -destination 'platform=macOS,arch=arm64' test
+   ```
 
 ## 测试与脱敏规范
 

@@ -102,6 +102,16 @@ targets:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
 
+  WidgetUpgradeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - App/Update/WidgetUpgradeRecovery.swift
+      - Tests/WidgetUpgradeTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   mac_tool:
     build:
@@ -113,3 +123,6 @@ schemes:
       executable: mac_tool
     archive:
       config: Release
+    test:
+      targets:
+        - WidgetUpgradeTests

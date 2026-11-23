@@ -39,6 +39,10 @@ final class AppModel {
         }
         hasStarted = true
 
+        #if !DEBUG
+            await WidgetUpgradeRecovery.refreshInstalledWidget()
+        #endif
+
         let store: SnapshotStore? = AppGroupConfig.snapshotsDirectoryURL().map {
             SnapshotStore(directoryURL: $0)
         }
