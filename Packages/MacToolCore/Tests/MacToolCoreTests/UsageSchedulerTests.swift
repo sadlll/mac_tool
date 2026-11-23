@@ -32,6 +32,44 @@ private actor MockUsageProvider: UsageProvider {
     }
 }
 
+private actor SuspendedUsageProvider: UsageProvider {
+    nonisolated let id: ProviderID = .codex
+    private let honorsCancellation: Bool
+    private let didStart: @Sendable () -> Void
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var firstFetchFinished = false
+    private var fetchCount = 0
+
+    init(honorsCancellation: Bool = true, didStart: @escaping @Sendable () -> Void) {
+        self.honorsCancellation = honorsCancellation
+        self.didStart = didStart
+    }
+
+    func detectCredential() async -> CredentialStatus {
+        .available(source: "mock")
+    }
+
+    func fetchUsage() async throws -> UsageSnapshot {
+        fetchCount += 1
+        if fetchCount == 1, !firstFetchFinished {
+            await withCheckedContinuation {
+                continuation = $0
+                didStart()
+            }
+        }
+        if honorsCancellation, Task.isCancelled {
+            throw ProviderError.networkFailure("已取消")
+        }
+        return UsageSnapshot(provider: id, fetchedAt: Date())
+    }
+
+    func finishFirstFetch() {
+        firstFetchFinished = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 private actor EventRecorder {
     private(set) var alerts: [QuotaAlertEvent] = []
     private(set) var widgetReloadCount = 0
@@ -160,5 +198,70 @@ final class UsageSchedulerTests: XCTestCase {
 
         let state = await scheduler.currentState()
         XCTAssertTrue(state.isPaused)
+    }
+
+    func testPauseCancelsActivePollingWithoutCountingFailure() async {
+        let began = XCTestExpectation(description: "Codex fetch began")
+        let finished = XCTestExpectation(description: "Cancelled polling finished")
+        let codex = SuspendedUsageProvider { began.fulfill() }
+        let next = MockUsageProvider(
+            id: .antigravity,
+            result: .success(UsageSnapshot(provider: .antigravity, fetchedAt: Date()))
+        )
+        let scheduler = UsageScheduler(providers: [codex, next], store: nil, onStateChange: { state in
+            if state.isPaused, !state.isRefreshing {
+                finished.fulfill()
+            }
+        })
+
+        await scheduler.start()
+        await fulfillment(of: [began], timeout: 2)
+        await scheduler.pause()
+        await codex.finishFirstFetch()
+        await fulfillment(of: [finished], timeout: 2)
+
+        let state = await scheduler.currentState()
+        XCTAssertEqual(state.providers[.codex]?.consecutiveFailures, 0)
+        XCTAssertNil(state.providers[.codex]?.nextRetryAt)
+        let laterFetchCount = await next.fetchCount
+        XCTAssertEqual(laterFetchCount, 0)
+        await scheduler.stop()
+    }
+
+    func testPauseDiscardsAnInterruptedManualRefresh() async {
+        let began = XCTestExpectation(description: "Manual fetch began")
+        let codex = SuspendedUsageProvider(honorsCancellation: false) { began.fulfill() }
+        let scheduler = UsageScheduler(providers: [codex], store: nil)
+        let refresh = Task { await scheduler.refreshNow() }
+
+        await fulfillment(of: [began], timeout: 2)
+        await scheduler.pause()
+        await codex.finishFirstFetch()
+        await refresh.value
+
+        let state = await scheduler.currentState()
+        XCTAssertNil(state.providers[.codex]?.snapshot)
+        XCTAssertNil(state.providers[.codex]?.lastErrorMessage)
+        XCTAssertFalse(state.isRefreshing)
+    }
+
+    func testResumeRefreshSurvivesAnIntervalChangeDuringCancellation() async {
+        let began = XCTestExpectation(description: "First fetch began")
+        let resumed = XCTestExpectation(description: "Resume produced a snapshot")
+        let codex = SuspendedUsageProvider { began.fulfill() }
+        let scheduler = UsageScheduler(providers: [codex], store: nil, onStateChange: { state in
+            if !state.isPaused, !state.isRefreshing, state.providers[.codex]?.snapshot != nil {
+                resumed.fulfill()
+            }
+        })
+
+        await scheduler.start()
+        await fulfillment(of: [began], timeout: 2)
+        await scheduler.pause()
+        await scheduler.resumeAndRefresh()
+        await scheduler.updateRefreshInterval(.oneMinute)
+        await codex.finishFirstFetch()
+        await fulfillment(of: [resumed], timeout: 2)
+        await scheduler.stop()
     }
 }
