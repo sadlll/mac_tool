@@ -5,8 +5,8 @@ import WidgetKit
 
 /// 供小组件编辑界面选择的 Antigravity 模型实体。
 struct AntigravityModelEntity: AppEntity {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Antigravity 模型")
-    static var defaultQuery = AntigravityModelQuery()
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Antigravity 模型")
+    static let defaultQuery = AntigravityModelQuery()
 
     let id: String
     let displayName: String
@@ -41,8 +41,8 @@ struct AntigravityModelQuery: EntityQuery {
 
 /// Antigravity 小组件配置意图：支持选择展示样式与自定义展示的模型分桶。
 struct SelectAntigravityModelsIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Antigravity 小组件设置"
-    static var description = IntentDescription("切换圆环/条形样式，并自定义要展示的模型分桶。")
+    static let title: LocalizedStringResource = "Antigravity 小组件设置"
+    static let description: IntentDescription? = IntentDescription("切换圆环/条形样式，并自定义要展示的模型分桶。")
 
     @Parameter(title: "展示样式", default: .ring)
     var style: WidgetDisplayStyle
@@ -132,9 +132,9 @@ struct AntigravityQuotaWidgetView: View {
                     title: parts.name,
                     badge: parts.badge,
                     remainingPercentage: model.remainingPercentage,
-                    resetText: isSmall
+                    resetInterval: isSmall
                         ? nil
-                        : WidgetStyleHelper.compactResetText(resetAt: model.resetAt, from: entry.date),
+                        : WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
                     ringSize: isSmall ? 48 : 54,
                     lineWidth: isSmall ? 5 : 5.5
                 )
@@ -176,11 +176,11 @@ struct AntigravityQuotaWidgetView: View {
                 Text("\(Int(model.remainingPercentage.rounded()))%")
                     .font(.caption2.bold().monospacedDigit())
                     .foregroundStyle(model.remainingPercentage <= 5 ? .red : .primary)
-                if showReset, let reset = WidgetStyleHelper.compactResetText(resetAt: model.resetAt, from: entry.date) {
-                    Text(reset.replacingOccurrences(of: "后重置", with: ""))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                if showReset {
+                    WidgetResetCountdown(interval: WidgetStyleHelper.resetInterval(
+                        endingAt: model.resetAt,
+                        from: entry.date
+                    ))
                 }
             }
             CapsuleProgressBar(fraction: model.remainingPercentage / 100.0, color: color, height: 4.5)

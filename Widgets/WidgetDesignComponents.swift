@@ -7,8 +7,8 @@ enum WidgetDisplayStyle: String, AppEnum {
     case ring
     case bar
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "展示样式")
-    static var caseDisplayRepresentations: [WidgetDisplayStyle: DisplayRepresentation] = [
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "展示样式")
+    static let caseDisplayRepresentations: [WidgetDisplayStyle: DisplayRepresentation] = [
         .ring: "圆环样式",
         .bar: "条形样式（Codex 风格）",
     ]
@@ -16,8 +16,8 @@ enum WidgetDisplayStyle: String, AppEnum {
 
 /// Codex 小组件样式配置意图。
 struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Codex 小组件样式"
-    static var description = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
+    static let title: LocalizedStringResource = "Codex 小组件样式"
+    static let description: IntentDescription? = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
 
     @Parameter(title: "展示样式", default: .ring)
     var style: WidgetDisplayStyle
@@ -25,8 +25,8 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
 
 /// Cursor 小组件样式配置意图。
 struct CursorWidgetConfigurationIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Cursor 小组件样式"
-    static var description = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
+    static let title: LocalizedStringResource = "Cursor 小组件样式"
+    static let description: IntentDescription? = IntentDescription("切换圆环样式或 Codex 风格条形样式。")
 
     @Parameter(title: "展示样式", default: .ring)
     var style: WidgetDisplayStyle
@@ -57,26 +57,12 @@ enum WidgetStyleHelper {
         return .blue
     }
 
-    /// 紧凑的中文重置倒计时文案（如“3 小时后重置”、“7 天后重置”）。
-    static func compactResetText(resetAt: Date?, from referenceDate: Date) -> String? {
-        guard let resetAt else {
+    /// 返回尚未结束的倒计时区间，供 WidgetKit 持续更新显示。
+    static func resetInterval(endingAt resetAt: Date?, from entryDate: Date) -> ClosedRange<Date>? {
+        guard let resetAt, resetAt > entryDate else {
             return nil
         }
-        let seconds = Int(resetAt.timeIntervalSince(referenceDate))
-        guard seconds > 0 else {
-            return "即将重置"
-        }
-        let days = seconds / 86400
-        let hours = (seconds % 86400) / 3600
-        let minutes = (seconds % 3600) / 60
-
-        if days >= 1 {
-            return "\(days)天后重置"
-        }
-        if hours >= 1 {
-            return "\(hours)小时后重置"
-        }
-        return "\(max(1, minutes))分钟后重置"
+        return entryDate ... resetAt
     }
 
     /// 将 Antigravity 较长的分桶名称拆分为简洁名称与窗口标签（如 `5h` / `周`），避免截断。
@@ -92,6 +78,28 @@ enum WidgetStyleHelper {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return (shortTitle, badge)
+    }
+}
+
+/// WidgetKit 负责更新倒计时，并在达到重置时刻时停在零。
+struct WidgetResetCountdown: View {
+    let interval: ClosedRange<Date>?
+
+    var body: some View {
+        if let interval {
+            HStack(spacing: 3) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .accessibilityLabel("距额度重置")
+                Text(timerInterval: interval, pauseTime: interval.upperBound)
+                    .monospacedDigit()
+                    .multilineTextAlignment(.leading)
+                    .frame(width: 54, alignment: .leading)
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 
@@ -126,7 +134,7 @@ struct QuotaRingMetricView: View {
     let title: String
     let badge: String?
     let remainingPercentage: Double
-    let resetText: String?
+    let resetInterval: ClosedRange<Date>?
     let ringSize: CGFloat
     let lineWidth: CGFloat
 
@@ -167,13 +175,7 @@ struct QuotaRingMetricView: View {
                 }
             }
 
-            if let resetText {
-                Text(resetText)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
+            WidgetResetCountdown(interval: resetInterval)
         }
         .frame(maxWidth: .infinity)
     }
@@ -183,7 +185,7 @@ struct QuotaRingMetricView: View {
 struct CodexStyleBarMetricView: View {
     let title: String
     let remainingPercentage: Double
-    let resetText: String?
+    let resetInterval: ClosedRange<Date>?
     let compact: Bool
 
     var body: some View {
@@ -220,12 +222,7 @@ struct CodexStyleBarMetricView: View {
 
             CapsuleProgressBar(fraction: clamped / 100.0, color: color, height: compact ? 5 : 6)
 
-            if let resetText {
-                Text(resetText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            WidgetResetCountdown(interval: resetInterval)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
