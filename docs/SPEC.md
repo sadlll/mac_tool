@@ -40,7 +40,7 @@ public enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
 | --- | --- | --- |
 | `QuotaWindow` | `id: String`, `label: String`, `usedPercentage: Double`, `resetAt: Date?`, `detail: String?` | `usedPercentage` 强制钳位在 `0...100`；`remainingPercentage = max(0, 100 - usedPercentage)` |
 | `ModelQuota` | `id: String`, `modelName: String`, `remainingPercentage: Double`, `resetAt: Date?` | `remainingPercentage` 强制钳位在 `0...100`；`usedPercentage = max(0, 100 - remainingPercentage)` |
-| `UsageSnapshot` | `provider: ProviderID`, `fetchedAt: Date`, `planName: String?`, `primaryWindow: QuotaWindow?`, `secondaryWindow: QuotaWindow?`, `modelQuotas: [ModelQuota]`, `billingSummary: String?` | 严格按 `provider` 隔离；`highestUsedPercentage` 取所有窗口与模型中的最大已用比例 |
+| `UsageSnapshot` | `provider: ProviderID`, `fetchedAt: Date`, `planName: String?`, `primaryWindow: QuotaWindow?`, `secondaryWindow: QuotaWindow?`, `additionalWindows: [QuotaWindow]?`, `modelQuotas: [ModelQuota]`, `billingSummary: String?` | 严格按 `provider` 隔离；`highestUsedPercentage` 取所有窗口与模型中的最大已用比例 |
 
 ### 2.3 `CredentialStatus` 与 `ProviderError`
 - `CredentialStatus`：`.available(source: String)`（仅描述脱敏路径）、`.missing`、`.invalid(reason: String)`
@@ -71,6 +71,8 @@ public protocol UsageProvider: Sendable {
 网络约束：
 - 仅允许访问上述官方/本机回环地址及自动更新用的 `github.com`、`objects.githubusercontent.com`
 - 一律使用 `URLSessionConfiguration.ephemeral`（禁用磁盘缓存与 Cookie 持久化）
+
+Cursor 额外通过同一域名的 `DashboardService/GetSandUsageStatus` 读取 Grok Bot 周额度。满足显示条件时，额度进入 `additionalWindows`，并使用该接口返回的重置时间。
 
 ---
 

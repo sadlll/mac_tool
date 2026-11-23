@@ -126,6 +126,7 @@ struct WidgetResetCountdown: View {
 
     let interval: ClosedRange<Date>?
     var stacked = false
+    var compactDate = false
 
     var body: some View {
         if let interval {
@@ -141,6 +142,11 @@ struct WidgetResetCountdown: View {
                     HStack(spacing: 3) {
                         Text("距重置")
                         countdown(interval)
+                    }
+                } else if compactDate {
+                    VStack(spacing: 1) {
+                        Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day())
+                        Text(interval.upperBound, format: .dateTime.hour().minute())
                     }
                 } else {
                     Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day().hour().minute())
@@ -200,6 +206,7 @@ struct QuotaRingMetricView: View {
     let resetInterval: ClosedRange<Date>?
     let ringSize: CGFloat
     let lineWidth: CGFloat
+    var compactDate = false
 
     var body: some View {
         let clamped = min(max(remainingPercentage, 0), 100)
@@ -238,7 +245,7 @@ struct QuotaRingMetricView: View {
                 }
             }
 
-            WidgetResetCountdown(interval: resetInterval, stacked: true)
+            WidgetResetCountdown(interval: resetInterval, stacked: true, compactDate: compactDate)
         }
         .frame(maxWidth: .infinity)
     }
