@@ -92,6 +92,8 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
 }
 
 struct AntigravityQuotaWidgetView: View {
+    private var palette = WidgetPalette()
+
     @Environment(\.widgetFamily) private var family
     let entry: AntigravityQuotaEntry
 
@@ -112,12 +114,12 @@ struct AntigravityQuotaWidgetView: View {
                 Spacer()
                 Text("等待主应用同步数据")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(palette.containerBackground, for: .widget)
     }
 
     @ViewBuilder
@@ -155,25 +157,26 @@ struct AntigravityQuotaWidgetView: View {
 
     private func compactBucketBarRow(_ model: ModelQuota, showReset: Bool) -> some View {
         let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
-        let color = WidgetStyleHelper.remainingColor(for: model.remainingPercentage)
+        let color = palette.progressColor(for: model.remainingPercentage)
 
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 Text(parts.name)
+                    .foregroundStyle(palette.primary)
                     .font(.caption2.weight(.medium))
                     .lineLimit(1)
                 if let badge = parts.badge {
                     Text(badge)
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 0.5)
-                        .background(.quaternary, in: Capsule())
+                        .background(palette.badgeBackground, in: Capsule())
                 }
                 Spacer(minLength: 4)
                 Text("\(Int(model.remainingPercentage.rounded()))%")
                     .font(.caption2.bold().monospacedDigit())
-                    .foregroundStyle(model.remainingPercentage <= 5 ? .red : .primary)
+                    .foregroundStyle(palette.percentageStyle(for: model.remainingPercentage))
                 if showReset {
                     WidgetResetCountdown(interval: WidgetStyleHelper.resetInterval(
                         endingAt: model.resetAt,

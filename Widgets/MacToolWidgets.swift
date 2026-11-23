@@ -79,6 +79,8 @@ struct CursorQuotaTimelineProvider: AppIntentTimelineProvider {
 }
 
 struct ProviderQuotaWidgetView: View {
+    private var palette = WidgetPalette()
+
     @Environment(\.widgetFamily) private var family
     let entry: ProviderQuotaEntry
 
@@ -95,12 +97,12 @@ struct ProviderQuotaWidgetView: View {
                 Spacer()
                 Text("等待主应用同步数据")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(palette.containerBackground, for: .widget)
     }
 
     @ViewBuilder
@@ -110,7 +112,7 @@ struct ProviderQuotaWidgetView: View {
             Spacer()
             Text(snapshot.billingSummary ?? "暂无额度明细")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette.secondary)
             Spacer()
         } else if entry.style == .ring {
             ringBody(windows: windows)
