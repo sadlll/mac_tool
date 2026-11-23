@@ -56,6 +56,40 @@ struct AntigravityQuotaEntry: TimelineEntry {
     let snapshot: UsageSnapshot?
     let style: WidgetDisplayStyle
     let selectedModelIDs: [String]
+
+    func visibleModels(limit: Int) -> [ModelQuota] {
+        let models = snapshot?.modelQuotas ?? []
+        let selectedIDs = Set(selectedModelIDs)
+        let selectedModels = models.filter { selectedIDs.contains($0.id) }
+        let visibleModels = selectedModels.isEmpty ? models : selectedModels
+        return Array(shortWindowsFirst(visibleModels).prefix(limit))
+    }
+
+    private func shortWindowsFirst(_ models: [ModelQuota]) -> [ModelQuota] {
+        var slotsByGroup: [Substring: [(index: Int, isWeekly: Bool)]] = [:]
+        for (index, model) in models.enumerated() {
+            let name = model.modelName
+            guard let separator = name.range(of: " · ", options: .backwards) else {
+                continue
+            }
+            let window = name[separator.upperBound...]
+            guard window == "5h" || window == "周" else {
+                continue
+            }
+            let group = name[..<separator.lowerBound]
+            slotsByGroup[group, default: []].append((index, window == "周"))
+        }
+
+        var ordered = models
+        // 只在同一模型组的 5h / 周位置之间重排，保留其他额度的位置。
+        for slots in slotsByGroup.values {
+            let sortedSlots = slots.filter { !$0.isWeekly } + slots.filter(\.isWeekly)
+            for (destination, source) in zip(slots, sortedSlots) {
+                ordered[destination.index] = models[source.index]
+            }
+        }
+        return ordered
+    }
 }
 
 struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
@@ -104,11 +138,11 @@ struct AntigravityQuotaWidgetView: View {
                 planName: entry.snapshot?.planName
             )
 
-            if let snapshot = entry.snapshot, !snapshot.modelQuotas.isEmpty {
+            if entry.snapshot?.modelQuotas.isEmpty == false {
                 if entry.style == .ring {
-                    ringBody(allModels: snapshot.modelQuotas)
+                    ringBody()
                 } else {
-                    barBody(allModels: snapshot.modelQuotas)
+                    barBody()
                 }
             } else {
                 Spacer()
@@ -123,9 +157,9 @@ struct AntigravityQuotaWidgetView: View {
     }
 
     @ViewBuilder
-    private func ringBody(allModels: [ModelQuota]) -> some View {
+    private func ringBody() -> some View {
         let isSmall = family == .systemSmall
-        let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 2 : 4)
+        let visible = entry.visibleModels(limit: isSmall ? 2 : 4)
         Spacer(minLength: 0)
         HStack(alignment: .top, spacing: isSmall ? 8 : 10) {
             ForEach(visible) { model in
@@ -144,9 +178,9 @@ struct AntigravityQuotaWidgetView: View {
     }
 
     @ViewBuilder
-    private func barBody(allModels: [ModelQuota]) -> some View {
+    private func barBody() -> some View {
         let isSmall = family == .systemSmall
-        let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 3 : 5)
+        let visible = entry.visibleModels(limit: isSmall ? 3 : 5)
         VStack(alignment: .leading, spacing: isSmall ? 6 : 5) {
             ForEach(visible) { model in
                 compactBucketBarRow(model, showReset: !isSmall)
@@ -186,17 +220,6 @@ struct AntigravityQuotaWidgetView: View {
             }
             CapsuleProgressBar(fraction: model.remainingPercentage / 100.0, color: color, height: 4.5)
         }
-    }
-
-    private func resolveVisibleModels(from allModels: [ModelQuota], maxCount: Int) -> [ModelQuota] {
-        if !entry.selectedModelIDs.isEmpty {
-            let selectedSet = Set(entry.selectedModelIDs)
-            let filtered = allModels.filter { selectedSet.contains($0.id) }
-            if !filtered.isEmpty {
-                return Array(filtered.prefix(maxCount))
-            }
-        }
-        return Array(allModels.prefix(maxCount))
     }
 }
 
