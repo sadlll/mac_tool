@@ -41,6 +41,7 @@ targets:
       properties:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleDisplayName: mac_tool
+        CFBundleIconFile: AppIcon.icns
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
