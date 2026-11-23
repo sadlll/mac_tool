@@ -9,9 +9,9 @@ import WidgetKit
 @Observable
 final class AppModel {
     private static let widgetKinds = [
-        "CodexQuotaWidget",
+        "CodexQuotaWidgetV2",
         "AntigravityQuotaWidget",
-        "CursorQuotaWidget",
+        "CursorQuotaWidgetV2",
     ]
 
     /// 调度器发布的最新状态。

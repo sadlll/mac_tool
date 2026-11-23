@@ -10,38 +10,70 @@ struct ProviderQuotaEntry: TimelineEntry {
     let style: WidgetDisplayStyle
 }
 
-/// 面向单个 Provider 的只读 TimelineProvider，仅从共享只读缓存读取数据。
-struct ProviderQuotaTimelineProvider: AppIntentTimelineProvider {
-    let provider: ProviderID
+/// Codex 小组件只读 TimelineProvider，仅从共享只读缓存读取数据。
+struct CodexQuotaTimelineProvider: AppIntentTimelineProvider {
     private let reader = ReadOnlySnapshotReader()
 
     func placeholder(in _: Context) -> ProviderQuotaEntry {
-        ProviderQuotaEntry(date: Date(), provider: provider, snapshot: nil, style: .ring)
+        ProviderQuotaEntry(date: Date(), provider: .codex, snapshot: nil, style: .ring)
     }
 
     func snapshot(
-        for configuration: ProviderWidgetStyleIntent,
+        for configuration: CodexWidgetConfigurationIntent,
         in _: Context
     ) async -> ProviderQuotaEntry {
         ProviderQuotaEntry(
             date: Date(),
-            provider: provider,
-            snapshot: reader.snapshot(for: provider),
+            provider: .codex,
+            snapshot: reader.snapshot(for: .codex),
             style: configuration.style
         )
     }
 
     func timeline(
-        for configuration: ProviderWidgetStyleIntent,
+        for configuration: CodexWidgetConfigurationIntent,
         in _: Context
     ) async -> Timeline<ProviderQuotaEntry> {
         let entry = ProviderQuotaEntry(
             date: Date(),
-            provider: provider,
-            snapshot: reader.snapshot(for: provider),
+            provider: .codex,
+            snapshot: reader.snapshot(for: .codex),
             style: configuration.style
         )
-        // 刷新由主应用通过 WidgetCenter 主动触发，避免系统频繁唤醒扩展。
+        return Timeline(entries: [entry], policy: .never)
+    }
+}
+
+/// Cursor 小组件只读 TimelineProvider，仅从共享只读缓存读取数据。
+struct CursorQuotaTimelineProvider: AppIntentTimelineProvider {
+    private let reader = ReadOnlySnapshotReader()
+
+    func placeholder(in _: Context) -> ProviderQuotaEntry {
+        ProviderQuotaEntry(date: Date(), provider: .cursor, snapshot: nil, style: .ring)
+    }
+
+    func snapshot(
+        for configuration: CursorWidgetConfigurationIntent,
+        in _: Context
+    ) async -> ProviderQuotaEntry {
+        ProviderQuotaEntry(
+            date: Date(),
+            provider: .cursor,
+            snapshot: reader.snapshot(for: .cursor),
+            style: configuration.style
+        )
+    }
+
+    func timeline(
+        for configuration: CursorWidgetConfigurationIntent,
+        in _: Context
+    ) async -> Timeline<ProviderQuotaEntry> {
+        let entry = ProviderQuotaEntry(
+            date: Date(),
+            provider: .cursor,
+            snapshot: reader.snapshot(for: .cursor),
+            style: configuration.style
+        )
         return Timeline(entries: [entry], policy: .never)
     }
 }
@@ -155,13 +187,13 @@ struct ProviderQuotaWidgetView: View {
 }
 
 struct CodexQuotaWidget: Widget {
-    let kind = "CodexQuotaWidget"
+    let kind = "CodexQuotaWidgetV2"
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(
             kind: kind,
-            intent: ProviderWidgetStyleIntent.self,
-            provider: ProviderQuotaTimelineProvider(provider: .codex)
+            intent: CodexWidgetConfigurationIntent.self,
+            provider: CodexQuotaTimelineProvider()
         ) { entry in
             ProviderQuotaWidgetView(entry: entry)
         }
@@ -172,13 +204,13 @@ struct CodexQuotaWidget: Widget {
 }
 
 struct CursorQuotaWidget: Widget {
-    let kind = "CursorQuotaWidget"
+    let kind = "CursorQuotaWidgetV2"
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(
             kind: kind,
-            intent: ProviderWidgetStyleIntent.self,
-            provider: ProviderQuotaTimelineProvider(provider: .cursor)
+            intent: CursorWidgetConfigurationIntent.self,
+            provider: CursorQuotaTimelineProvider()
         ) { entry in
             ProviderQuotaWidgetView(entry: entry)
         }
