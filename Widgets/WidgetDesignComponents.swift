@@ -130,19 +130,20 @@ struct WidgetResetCountdown: View {
     var body: some View {
         if let interval {
             let usesTimer = interval.upperBound.timeIntervalSince(interval.lowerBound) <= 3600
-            let label: LocalizedStringKey = usesTimer ? "距重置" : "重置于"
 
             Group {
-                if stacked {
+                if usesTimer, stacked {
                     VStack(spacing: 1) {
-                        Text(label)
-                        resetTime(interval, usesTimer: usesTimer)
+                        Text("距重置")
+                        countdown(interval)
+                    }
+                } else if usesTimer {
+                    HStack(spacing: 3) {
+                        Text("距重置")
+                        countdown(interval)
                     }
                 } else {
-                    HStack(spacing: 3) {
-                        Text(label)
-                        resetTime(interval, usesTimer: usesTimer)
-                    }
+                    Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day().hour().minute())
                 }
             }
             .font(.system(size: 10).monospacedDigit())
@@ -153,15 +154,10 @@ struct WidgetResetCountdown: View {
         }
     }
 
-    @ViewBuilder
-    private func resetTime(_ interval: ClosedRange<Date>, usesTimer: Bool) -> some View {
-        if usesTimer {
-            Text(timerInterval: interval, pauseTime: interval.upperBound, showsHours: false)
-                .multilineTextAlignment(stacked ? .center : .leading)
-                .frame(width: 32, alignment: stacked ? .center : .leading)
-        } else {
-            Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day().hour().minute())
-        }
+    private func countdown(_ interval: ClosedRange<Date>) -> some View {
+        Text(timerInterval: interval, pauseTime: interval.upperBound, showsHours: false)
+            .multilineTextAlignment(stacked ? .center : .leading)
+            .frame(width: 32, alignment: stacked ? .center : .leading)
     }
 }
 
