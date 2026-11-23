@@ -46,17 +46,6 @@ private final class CountingKeychainReader: KeychainPasswordReader, @unchecked S
     }
 }
 
-private struct MockKeychainReader: KeychainPasswordReader {
-    let password: String?
-
-    func readGenericPassword(service _: String, account _: String) throws -> String {
-        guard let password else {
-            throw ProviderError.credentialInvalid("未找到测试钥匙串密码")
-        }
-        return password
-    }
-}
-
 private struct MockCursorHTTPClient: HTTPClient {
     let statusCode: Int
     let body: Data
@@ -90,6 +79,40 @@ final class CursorProviderTests: XCTestCase {
         XCTAssertEqual(keychainReader.calls, 1)
     }
 
+    func testSafeStorageDecryptorSharesKeychainFailureAcrossReads() async throws {
+        let password = "unit-test-master-password"
+        let encryptedValue = try encryptV10(plaintext: "fake.jwt.payload-token", password: password)
+        let keychainReader = CountingKeychainReader(password: nil)
+        let decryptor = CursorSafeStorageDecryptor(keychainReader: keychainReader)
+        let expectedError = ProviderError.credentialInvalid("未找到测试钥匙串密码")
+
+        await withTaskGroup(of: ProviderError?.self) { group in
+            for _ in 0 ..< 8 {
+                group.addTask {
+                    do {
+                        _ = try decryptor.decryptIfNeeded(encryptedValue)
+                        return nil
+                    } catch {
+                        return error as? ProviderError
+                    }
+                }
+            }
+            for await error in group {
+                XCTAssertEqual(error, expectedError)
+            }
+        }
+
+        XCTAssertThrowsError(try decryptor.decryptIfNeeded(encryptedValue)) { error in
+            XCTAssertEqual(error as? ProviderError, expectedError)
+        }
+        XCTAssertEqual(keychainReader.calls, 1)
+
+        let newReader = CountingKeychainReader(password: password)
+        let newDecryptor = CursorSafeStorageDecryptor(keychainReader: newReader)
+        XCTAssertEqual(try newDecryptor.decryptIfNeeded(encryptedValue), "fake.jwt.payload-token")
+        XCTAssertEqual(newReader.calls, 1)
+    }
+
     func testCredentialReaderHandlesPlaintextEncryptedAndMissing() throws {
         let missingReader = CursorCredentialReader(
             databaseReader: InMemoryCursorDB(exists: false, values: [:])
@@ -115,15 +138,19 @@ final class CursorProviderTests: XCTestCase {
 
         let password = "mock-keychain-secret"
         let encrypted = try encryptV10(plaintext: "decrypted.jwt.token", password: password)
+        let keychainReader = CountingKeychainReader(password: password)
         let encryptedReader = CursorCredentialReader(
             databaseReader: InMemoryCursorDB(
                 exists: true,
                 values: ["cursorAuth/accessToken": encrypted]
             ),
-            decryptor: CursorSafeStorageDecryptor(
-                keychainReader: MockKeychainReader(password: password)
-            )
+            decryptor: CursorSafeStorageDecryptor(keychainReader: keychainReader)
         )
+        XCTAssertEqual(
+            encryptedReader.detectStatus(),
+            .available(source: CursorCredentialReader.defaultDisplaySource)
+        )
+        XCTAssertEqual(keychainReader.calls, 0)
         let encCred = try encryptedReader.readCredential()
         XCTAssertEqual(encCred.accessToken, "decrypted.jwt.token")
     }
