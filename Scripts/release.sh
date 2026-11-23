@@ -102,6 +102,7 @@ cat > "$APPCAST_PATH" <<EOF
       <pubDate>${PUB_DATE}</pubDate>
       <sparkle:version>${BUILD_NUMBER}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <enclosure
         url="${DOWNLOAD_URL}"
