@@ -251,6 +251,7 @@ public struct AntigravityProvider: UsageProvider {
     }
 
     public func fetchUsage() async throws -> UsageSnapshot {
+        try Task.checkCancellation()
         let daemons = daemonDiscoverer.discoverDaemons()
         guard !daemons.isEmpty else {
             throw ProviderError.credentialMissing
@@ -260,7 +261,10 @@ public struct AntigravityProvider: UsageProvider {
         for daemon in daemons {
             do {
                 return try await fetchFromDaemon(daemon)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
+                try Task.checkCancellation()
                 lastError = error
             }
         }
@@ -274,6 +278,7 @@ public struct AntigravityProvider: UsageProvider {
         if let summaryData = try await performOptionalRPC(daemon: daemon, path: Self.quotaSummaryPath) {
             // 顺序请求 GetUserStatus 仅用于补充套餐名称（可选任务，失败不影响主额度数据）。
             let statusData = try? await performOptionalRPC(daemon: daemon, path: Self.userStatusPath)
+            try Task.checkCancellation()
             let planName = statusData.flatMap { parser.parsePlanName(data: $0) }
             return try parser.parseQuotaSummary(data: summaryData, planName: planName, fetchedAt: fetchedAt)
         }
@@ -310,6 +315,7 @@ public struct AntigravityProvider: UsageProvider {
     }
 
     private func sendRPC(daemon: AntigravityDaemonInfo, path: String) async throws -> (Data, HTTPURLResponse) {
+        try Task.checkCancellation()
         guard let url = URL(string: "http://127.0.0.1:\(daemon.httpPort)\(path)") else {
             throw ProviderError.invalidResponse("Antigravity 本机端口配置无效")
         }
@@ -322,9 +328,11 @@ public struct AntigravityProvider: UsageProvider {
 
         do {
             return try await httpClient.data(for: request)
-        } catch let error as ProviderError {
-            throw error
         } catch {
+            try Task.checkCancellation()
+            if error is ProviderError || error is CancellationError {
+                throw error
+            }
             throw ProviderError.networkFailure(error.localizedDescription)
         }
     }

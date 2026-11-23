@@ -5,8 +5,21 @@ import os
 /// 监听系统睡眠、唤醒、熄屏与锁屏事件，通知调度器暂停或立即恢复刷新。
 @MainActor
 final class WorkspacePowerMonitor {
+    private enum PauseReason: String, Sendable {
+        case systemSleep
+        case displaySleep
+        case screenLocked
+    }
+
+    private enum PowerEvent: Sendable {
+        case pause(PauseReason)
+        case resume(PauseReason)
+    }
+
     private static let logger = Logger(subsystem: "com.sadlll.mac-tool", category: "PowerMonitor")
-    private var tasks: [Task<Void, Never>] = []
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    private var eventTask: Task<Void, Never>?
+    private var pauseReasons: Set<PauseReason> = []
 
     /// 开始监听系统电源与锁屏通知。
     func start(
@@ -14,48 +27,69 @@ final class WorkspacePowerMonitor {
         onResume: @escaping @Sendable () async -> Void
     ) {
         stop()
-
+        let (events, continuation) = AsyncStream<PowerEvent>.makeStream()
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         let distributedCenter = DistributedNotificationCenter.default()
-
-        let pauseNotifications: [(NotificationCenter, Notification.Name)] = [
-            (workspaceCenter, NSWorkspace.willSleepNotification),
-            (workspaceCenter, NSWorkspace.screensDidSleepNotification),
-            (distributedCenter, Notification.Name("com.apple.screenIsLocked")),
+        let notifications: [PauseReason: (pause: Notification.Name, resume: Notification.Name)] = [
+            .systemSleep: (NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification),
+            .displaySleep: (NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification),
+            .screenLocked: (
+                Notification.Name("com.apple.screenIsLocked"),
+                Notification.Name("com.apple.screenIsUnlocked")
+            ),
         ]
 
-        let resumeNotifications: [(NotificationCenter, Notification.Name)] = [
-            (workspaceCenter, NSWorkspace.didWakeNotification),
-            (workspaceCenter, NSWorkspace.screensDidWakeNotification),
-            (distributedCenter, Notification.Name("com.apple.screenIsUnlocked")),
-        ]
-
-        for (center, name) in pauseNotifications {
-            let task = Task {
-                for await _ in center.notifications(named: name) {
-                    Self.logger.info("收到系统暂停事件：\(name.rawValue, privacy: .public)")
-                    await onPause()
-                }
+        // 在通知到达时入同一个队列，避免暂停与恢复回调交错处理。
+        for (reason, names) in notifications {
+            let center: NotificationCenter = reason == .screenLocked ? distributedCenter : workspaceCenter
+            let pause = center.addObserver(forName: names.pause, object: nil, queue: nil) { _ in
+                continuation.yield(.pause(reason))
             }
-            tasks.append(task)
+            let resume = center.addObserver(forName: names.resume, object: nil, queue: nil) { _ in
+                continuation.yield(.resume(reason))
+            }
+            observers.append((center, pause))
+            observers.append((center, resume))
         }
 
-        for (center, name) in resumeNotifications {
-            let task = Task {
-                for await _ in center.notifications(named: name) {
-                    Self.logger.info("收到系统恢复事件：\(name.rawValue, privacy: .public)")
-                    await onResume()
+        eventTask = Task { [weak self] in
+            for await event in events {
+                guard let self, !Task.isCancelled else {
+                    break
+                }
+                let wasPaused = !pauseReasons.isEmpty
+                apply(event)
+                let isPaused = !pauseReasons.isEmpty
+                if wasPaused != isPaused {
+                    if isPaused {
+                        await onPause()
+                    } else {
+                        await onResume()
+                    }
                 }
             }
-            tasks.append(task)
+        }
+    }
+
+    private func apply(_ event: PowerEvent) {
+        switch event {
+        case let .pause(reason):
+            Self.logger.info("收到系统暂停事件：\(reason.rawValue, privacy: .public)")
+            pauseReasons.insert(reason)
+        case let .resume(reason):
+            Self.logger.info("收到系统恢复事件：\(reason.rawValue, privacy: .public)")
+            pauseReasons.remove(reason)
         }
     }
 
     /// 停止监听并释放任务。
     func stop() {
-        for task in tasks {
-            task.cancel()
+        for (center, observer) in observers {
+            center.removeObserver(observer)
         }
-        tasks.removeAll()
+        observers.removeAll()
+        eventTask?.cancel()
+        eventTask = nil
+        pauseReasons.removeAll()
     }
 }
