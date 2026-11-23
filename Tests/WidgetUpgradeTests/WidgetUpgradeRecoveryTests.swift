@@ -82,7 +82,13 @@ final class WidgetUpgradeRecoveryTests: XCTestCase {
 
     private func buildFixture(at url: URL) throws {
         let source = url.appendingPathExtension("c")
-        try "#include <unistd.h>\nint main(void) { for (;;) pause(); }".write(
+        try """
+        #include <unistd.h>
+        int main(void) {
+            if (write(STDOUT_FILENO, "x", 1) != 1) return 1;
+            for (;;) pause();
+        }
+        """.write(
             to: source,
             atomically: true,
             encoding: .utf8
@@ -97,8 +103,11 @@ final class WidgetUpgradeRecoveryTests: XCTestCase {
 
     private func runFixture(at url: URL) throws -> Process {
         let process = Process()
+        let ready = Pipe()
         process.executableURL = url
+        process.standardOutput = ready
         try process.run()
+        XCTAssertEqual(try ready.fileHandleForReading.read(upToCount: 1), Data("x".utf8))
         return process
     }
 
