@@ -30,23 +30,27 @@ public struct CursorUsageParser: Sendable {
         let primaryPercent = resolvePrimaryPercentage(planUsage)
         let spendDetail = formatSpendSummary(includedCents: planUsage.includedSpend, limitCents: planUsage.limit)
 
-        let primaryWindow = QuotaWindow(
-            id: "monthly_total",
-            label: "本月总用量",
-            usedPercentage: primaryPercent,
-            resetAt: resetAt,
-            detail: spendDetail
-        )
+        let primaryWindow = primaryPercent.map { percent in
+            QuotaWindow(
+                id: "monthly_total",
+                label: "本月总用量",
+                usedPercentage: percent,
+                resetAt: resetAt,
+                detail: spendDetail
+            )
+        }
 
-        let secondaryWindow: QuotaWindow? = if let apiPercent = planUsage.apiPercentUsed {
+        let secondaryWindow = planUsage.apiPercentUsed.map { percent in
             QuotaWindow(
                 id: "monthly_api",
                 label: "API 额度",
-                usedPercentage: apiPercent,
+                usedPercentage: percent,
                 resetAt: resetAt
             )
-        } else {
-            nil
+        }
+
+        guard primaryWindow != nil || secondaryWindow != nil else {
+            throw ProviderError.unsupportedFormat("Cursor 响应缺少有效的用量数据")
         }
 
         return UsageSnapshot(
@@ -60,18 +64,18 @@ public struct CursorUsageParser: Sendable {
         )
     }
 
-    private func resolvePrimaryPercentage(_ planUsage: CursorPlanUsage) -> Double {
+    private func resolvePrimaryPercentage(_ planUsage: CursorPlanUsage) -> Double? {
         if let totalPercent = planUsage.totalPercentUsed {
             return totalPercent
         }
-        if let included = planUsage.includedSpend, let limit = planUsage.limit, limit > 0 {
+        if let included = planUsage.includedSpend, included >= 0, let limit = planUsage.limit, limit > 0 {
             return (Double(included) / Double(limit)) * 100
         }
-        return planUsage.autoPercentUsed ?? 0
+        return planUsage.autoPercentUsed
     }
 
     private func formatSpendSummary(includedCents: Int?, limitCents: Int?) -> String? {
-        guard let includedCents, let limitCents, limitCents > 0 else {
+        guard let includedCents, includedCents >= 0, let limitCents, limitCents > 0 else {
             return nil
         }
         let includedDollars = Double(includedCents) / 100.0
