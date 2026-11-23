@@ -75,6 +75,8 @@ public actor UsageScheduler {
     private var state: SchedulerState
     private var triggeredAlertLevels: [ProviderID: AlertLevel] = [:]
     private var pollingTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
+    private var immediateRefreshPending = false
 
     /// 初始化统一调度器。
     public init(
@@ -119,30 +121,32 @@ public actor UsageScheduler {
     /// 启动调度器：先加载本地缓存，再开始定时轮询。
     public func start() async {
         await loadCachedSnapshots()
-        state.isPaused = false
         await publishState()
-        restartPollingLoop(immediateRefresh: true)
+        if !state.isPaused {
+            restartPollingLoop(immediateRefresh: true)
+        }
     }
 
     /// 停止调度器并取消后台轮询任务。
     public func stop() {
         pollingTask?.cancel()
         pollingTask = nil
+        refreshTask?.cancel()
+        immediateRefreshPending = false
     }
 
     /// 暂停轮询（用于系统睡眠或锁屏）。
     public func pause() async {
         state.isPaused = true
-        pollingTask?.cancel()
-        pollingTask = nil
+        stop()
         await publishState()
     }
 
     /// 从暂停状态恢复并立即刷新一次（用于系统唤醒或解锁）。
     public func resumeAndRefresh() async {
         state.isPaused = false
-        await publishState()
         restartPollingLoop(immediateRefresh: true)
+        await publishState()
     }
 
     /// 更新轮询间隔并重新安排下一次定时刷新。
@@ -185,9 +189,6 @@ public actor UsageScheduler {
 
     /// 执行一次定时刷新（遵守各 Provider 的指数退避冷却时间）。
     public func performScheduledRefresh() async {
-        guard !state.isPaused else {
-            return
-        }
         await performRefresh(respectBackoff: true)
     }
 
@@ -206,22 +207,17 @@ public actor UsageScheduler {
 
     private func restartPollingLoop(immediateRefresh: Bool) {
         pollingTask?.cancel()
+        immediateRefreshPending = immediateRefreshPending || immediateRefresh
         pollingTask = Task { [weak self] in
             guard let self else {
                 return
             }
-            if immediateRefresh {
-                await performScheduledRefresh()
-            }
+            await performPendingImmediateRefresh()
             while !Task.isCancelled {
-                let intervalSeconds = await currentIntervalSeconds()
-                let nanoseconds = UInt64(max(1, intervalSeconds) * 1_000_000_000)
+                let interval = await refreshInterval.seconds
                 do {
-                    try await Task.sleep(nanoseconds: nanoseconds)
+                    try await Task.sleep(for: .seconds(interval))
                 } catch {
-                    break
-                }
-                if Task.isCancelled {
                     break
                 }
                 await performScheduledRefresh()
@@ -229,12 +225,32 @@ public actor UsageScheduler {
         }
     }
 
-    private func currentIntervalSeconds() -> TimeInterval {
-        refreshInterval.seconds
+    private func performPendingImmediateRefresh() async {
+        guard immediateRefreshPending, !Task.isCancelled else {
+            return
+        }
+        if let refreshTask, refreshTask.isCancelled {
+            await refreshTask.value
+        }
+        guard !Task.isCancelled, !state.isPaused else {
+            return
+        }
+        immediateRefreshPending = false
+        await performScheduledRefresh()
     }
 
     private func performRefresh(respectBackoff: Bool) async {
-        guard !state.isRefreshing else {
+        guard !state.isPaused, !Task.isCancelled, refreshTask == nil else {
+            return
+        }
+        let task = Task { await refreshProviders(respectBackoff: respectBackoff) }
+        refreshTask = task
+        await task.value
+    }
+
+    private func refreshProviders(respectBackoff: Bool) async {
+        defer { refreshTask = nil }
+        guard !Task.isCancelled else {
             return
         }
         state.isRefreshing = true
@@ -245,6 +261,9 @@ public actor UsageScheduler {
 
         // 顺序遍历各 Provider，避免使用 async let 混排必需与可选任务，且严格隔离单点故障。
         for id in ProviderID.allCases {
+            guard !Task.isCancelled else {
+                break
+            }
             let updated = await refreshSingleProvider(id, now: now, respectBackoff: respectBackoff)
             didUpdateAnySnapshot = didUpdateAnySnapshot || updated
         }
@@ -270,6 +289,9 @@ public actor UsageScheduler {
         }
 
         let credentialStatus = await provider.detectCredential()
+        guard !Task.isCancelled else {
+            return false
+        }
         runtime.credentialStatus = credentialStatus
 
         guard credentialStatus.isAvailable else {
@@ -282,35 +304,45 @@ public actor UsageScheduler {
 
         do {
             let snapshot = try await provider.fetchUsage()
+            guard !Task.isCancelled else {
+                return false
+            }
             runtime.snapshot = snapshot
             runtime.lastErrorMessage = nil
             runtime.consecutiveFailures = 0
             runtime.nextRetryAt = nil
             state.providers[id] = runtime
             state.lastUpdatedAt = snapshot.fetchedAt
-
-            if let store {
-                try? await store.save(snapshot)
-            }
-
-            let previousLevel = triggeredAlertLevels[id] ?? .none
-            let evaluation = thresholdEvaluator.evaluate(
-                snapshot: snapshot,
-                settings: alertSettings,
-                previousLevel: previousLevel
-            )
-            triggeredAlertLevels[id] = evaluation.updatedLevel
-            if let alertEvent = evaluation.alertEvent {
-                await onAlert(alertEvent)
-            }
+            await saveAndEvaluateAlert(snapshot, for: id)
             return true
         } catch {
+            guard !Task.isCancelled, !(error is CancellationError) else {
+                return false
+            }
             runtime.consecutiveFailures += 1
             runtime.lastErrorMessage = error.localizedDescription
             let delay = backoffPolicy.delay(forFailureCount: runtime.consecutiveFailures)
             runtime.nextRetryAt = now.addingTimeInterval(delay)
             state.providers[id] = runtime
             return false
+        }
+    }
+
+    private func saveAndEvaluateAlert(_ snapshot: UsageSnapshot, for id: ProviderID) async {
+        if let store {
+            try? await store.save(snapshot)
+        }
+        guard !Task.isCancelled else {
+            return
+        }
+        let evaluation = thresholdEvaluator.evaluate(
+            snapshot: snapshot,
+            settings: alertSettings,
+            previousLevel: triggeredAlertLevels[id] ?? .none
+        )
+        triggeredAlertLevels[id] = evaluation.updatedLevel
+        if let alertEvent = evaluation.alertEvent {
+            await onAlert(alertEvent)
         }
     }
 
