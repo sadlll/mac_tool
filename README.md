@@ -164,7 +164,7 @@ open mac_tool.xcodeproj
 - [x] Antigravity Provider + 小组件（支持自定义展示模型分桶）
 - [x] 阈值通知、睡眠/锁屏暂停与唤醒刷新、开机自启（`SMAppService`）
 - [x] Sparkle 2 应用内更新（菜单栏手动检查、每日自动检查与 EdDSA 校验）
-- [ ] 签名、公证，GitHub Releases 自动发布
+- [x] GitHub Releases 自动构建、EdDSA 签名与 `appcast.xml` 发布流水线（含 dry-run 演练）
 - [ ] Homebrew Cask
 
 ## 同类项目
