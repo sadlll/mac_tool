@@ -22,12 +22,32 @@ xcodebuild \
   -project mac_tool.xcodeproj \
   -scheme mac_tool \
   -configuration Release \
+  -destination 'generic/platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   build
 
 APP_PATH="$DERIVED_DATA/Build/Products/Release/mac_tool.app"
+
+echo "==> 校验应用和小组件的版本与架构..."
+for BUNDLE_PATH in "$APP_PATH" "$APP_PATH/Contents/PlugIns/MacToolWidgets.appex"; do
+  INFO_PLIST="$BUNDLE_PATH/Contents/Info.plist"
+  BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
+  BUNDLE_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
+  if [[ "$BUNDLE_VERSION" != "$VERSION" || "$BUNDLE_BUILD" != "$BUILD_NUMBER" ]]; then
+    echo "错误：${BUNDLE_PATH##*/} 版本为 ${BUNDLE_VERSION} / ${BUNDLE_BUILD}，预期 ${VERSION} / ${BUILD_NUMBER}" >&2
+    exit 1
+  fi
+
+  EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST")"
+  ARCHITECTURES="$(xcrun lipo -archs "$BUNDLE_PATH/Contents/MacOS/$EXECUTABLE")"
+  if [[ "$ARCHITECTURES" != "arm64" ]]; then
+    echo "错误：${BUNDLE_PATH##*/} 架构为 ${ARCHITECTURES}，预期 arm64" >&2
+    exit 1
+  fi
+done
+
 DMG_NAME="mac_tool-${VERSION}.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
 STAGE_DIR="$DIST_DIR/dmg-stage"

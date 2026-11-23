@@ -32,7 +32,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | 操作系统 | macOS 14 Sonoma 或更高版本（桌面小组件从 Sonoma 开始支持） |
-| 芯片 | Apple Silicon / Intel |
+| 芯片 | Apple Silicon（arm64） |
 | 前置条件 | 已在本机登录过要监控的工具（Codex CLI、Antigravity、Cursor） |
 
 ## 安装
