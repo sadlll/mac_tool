@@ -125,16 +125,14 @@ struct AntigravityQuotaWidgetView: View {
         let isSmall = family == .systemSmall
         let visible = resolveVisibleModels(from: allModels, maxCount: isSmall ? 2 : 4)
         Spacer(minLength: 0)
-        HStack(spacing: isSmall ? 8 : 10) {
+        HStack(alignment: .top, spacing: isSmall ? 8 : 10) {
             ForEach(visible) { model in
                 let parts = WidgetStyleHelper.splitBucketLabel(model.modelName)
                 QuotaRingMetricView(
                     title: parts.name,
                     badge: parts.badge,
                     remainingPercentage: model.remainingPercentage,
-                    resetInterval: isSmall
-                        ? nil
-                        : WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
+                    resetInterval: WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
                     ringSize: isSmall ? 48 : 54,
                     lineWidth: isSmall ? 5 : 5.5
                 )
