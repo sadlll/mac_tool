@@ -10,6 +10,9 @@ options:
 packages:
   MacToolCore:
     path: Packages/MacToolCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.7.0
 
 settings:
   base:
@@ -38,6 +41,10 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleDisplayName: mac_tool
         LSUIElement: true
+        SUFeedURL: https://github.com/sadlll/mac_tool/releases/latest/download/appcast.xml
+        SUPublicEDKey: zK4WSuh70GQOrch1XygfE2WKkHxFYeaEkIPyJODbbVk=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     entitlements:
       path: App/mac_tool.entitlements
       properties:
@@ -50,6 +57,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
     dependencies:
       - package: MacToolCore
+      - package: Sparkle
       - target: MacToolWidgets
         embed: true
         codeSign: true

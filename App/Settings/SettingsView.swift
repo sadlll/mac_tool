@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings: SettingsStore
     @Bindable var model: AppModel
+    @Bindable var updater: UpdateController
 
     var body: some View {
         TabView {
@@ -22,8 +23,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("账户关联", systemImage: "person.badge.key")
                 }
+
+            updatesTab
+                .tabItem {
+                    Label("更新", systemImage: "arrow.down.circle")
+                }
         }
-        .frame(width: 440, height: 280)
+        .frame(width: 460, height: 300)
         .padding(16)
     }
 
@@ -130,6 +136,35 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var updatesTab: some View {
+        Form {
+            Toggle("每天自动检查更新", isOn: $updater.automaticallyChecksForUpdates)
+
+            Toggle("发现新版本时自动下载并安装", isOn: $updater.automaticallyDownloadsUpdates)
+                .disabled(!updater.automaticallyChecksForUpdates)
+
+            HStack {
+                Text("当前版本")
+                Spacer()
+                Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            HStack {
+                Spacer()
+                Button("立即检查更新…") {
+                    updater.checkForUpdates()
+                }
+            }
+
+            Text("仅接收稳定版更新；安装包在安装前会自动通过 EdDSA 签名校验。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
     }
 
     private func credentialLabel(for provider: ProviderID) -> String {

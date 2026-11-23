@@ -18,13 +18,18 @@ final class AppModel {
     var schedulerState = SchedulerState()
 
     let settings: SettingsStore
+    let updater: UpdateController
     private let powerMonitor = WorkspacePowerMonitor()
     private let notificationService = QuotaNotificationService()
     private var scheduler: UsageScheduler?
     private var hasStarted = false
 
-    init(settings: SettingsStore = SettingsStore()) {
+    init(
+        settings: SettingsStore = SettingsStore(),
+        updater: UpdateController = UpdateController()
+    ) {
         self.settings = settings
+        self.updater = updater
     }
 
     /// 启动调度器与系统电源/锁屏监听（幂等，仅首次生效）。
@@ -121,7 +126,7 @@ struct MacToolApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(settings: model.settings, model: model)
+            SettingsView(settings: model.settings, model: model, updater: model.updater)
         }
     }
 }
@@ -160,7 +165,7 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            HStack {
+            HStack(spacing: 12) {
                 Button("立即刷新") {
                     Task {
                         await model.refreshNow()
@@ -169,6 +174,10 @@ struct MenuBarContentView: View {
                 .disabled(model.schedulerState.isRefreshing)
 
                 Spacer()
+
+                Button("检查更新…") {
+                    model.updater.checkForUpdates()
+                }
 
                 SettingsLink {
                     Text("设置…")
