@@ -33,7 +33,7 @@
   - 验证：`xcodegen generate && xcodebuild -project mac_tool.xcodeproj -scheme mac_tool build` + `swiftlint --strict`
 - [x] **Task 8 — GitHub Releases 自动发布与 appcast 生成流水线**
   - 文件：`.github/workflows/release.yml`、`Scripts/release.sh`
-  - 要点：仅在维护者推送 `v*` Tag 时触发；构建 Release `.dmg`、使用 `SPARKLE_PRIVATE_KEY` Secret 签名、生成 `appcast.xml` 并上传 GitHub Release；支持 `workflow_dispatch` dry-run 演练
+  - 推送 `v*` tag 时自动构建 Release `.dmg`，使用 `SPARKLE_PRIVATE_KEY` Secret 签名，生成 `appcast.xml` 并上传到 GitHub Release。推送授权见[发布指南](./RELEASING.md#发布原则)，也支持用 `workflow_dispatch` 进行 dry-run 演练。
   - 验证：触发 `workflow_dispatch`（dry-run）检查产物结构与签名步骤
 - [ ] **Task 9 — Homebrew Cask 发布配置**
   - 文件：单独 tap 仓库 `sadlll/homebrew-tap`（`Casks/mac-tool.rb`）与 `README.md` 安装说明同步
