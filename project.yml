@@ -70,6 +70,7 @@ targets:
         excludes:
           - "**/*.entitlements"
           - "**/Info.plist"
+      - path: Resources/Localizable.xcstrings
     info:
       path: Widgets/Info.plist
       properties:

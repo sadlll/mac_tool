@@ -51,10 +51,8 @@ final class AppModel {
             store: store,
             refreshInterval: settings.refreshInterval,
             alertSettings: settings.alertSettings,
-            onStateChange: { [weak self] newState in
-                await MainActor.run {
-                    self?.schedulerState = newState
-                }
+            onStateChange: { @MainActor [weak self] newState in
+                self?.schedulerState = newState
             },
             onAlert: { event in
                 await notificationService.send(event)
@@ -147,10 +145,6 @@ struct MenuBarContentView: View {
                     Text("已暂停")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                } else if let lastUpdatedAt = model.schedulerState.lastUpdatedAt {
-                    Text(lastUpdatedAt, style: .time)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -206,22 +200,30 @@ private struct ProviderStatusRow: View {
                 if let planName = runtimeState?.snapshot?.planName {
                     Text(planName)
                         .font(.caption2)
+                        .lineLimit(1)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(.quaternary, in: Capsule())
                 }
                 Spacer()
-                if runtimeState?.snapshot == nil {
-                    if runtimeState?.lastErrorMessage != nil {
-                        Text("拉取失败")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    } else {
-                        Text("暂未同步")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
+                if let fetchedAt = runtimeState?.snapshot?.fetchedAt {
+                    let time = Text(fetchedAt, format: .dateTime.month(.defaultDigits).day().hour().minute())
+                    Text("上次成功 \(time)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else if refreshIssue == nil {
+                    Text("暂未同步")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
+            }
+
+            if let refreshIssue {
+                Text(refreshIssue)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let snapshot = runtimeState?.snapshot {
@@ -238,6 +240,22 @@ private struct ProviderStatusRow: View {
                     }
                 }
             }
+        }
+    }
+
+    private var refreshIssue: LocalizedStringKey? {
+        switch runtimeState?.credentialStatus {
+        case .missing:
+            return "未检测到凭据"
+        case .invalid:
+            return "凭据无效，请在原工具中重新登录"
+        case .available:
+            guard let message = runtimeState?.lastErrorMessage else {
+                return nil
+            }
+            return "拉取失败：\(message)"
+        case nil:
+            return nil
         }
     }
 

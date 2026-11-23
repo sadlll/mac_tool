@@ -129,9 +129,9 @@ struct ProviderQuotaWidgetView: View {
                     title: shortWindowTitle(window),
                     badge: nil,
                     remainingPercentage: window.remainingPercentage,
-                    resetText: isSmall
+                    resetInterval: isSmall
                         ? nil
-                        : WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                        : WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
                     ringSize: isSmall ? 50 : 64,
                     lineWidth: isSmall ? 5.5 : 6.5
                 )
@@ -148,7 +148,7 @@ struct ProviderQuotaWidgetView: View {
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
-                        resetText: WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
                         compact: true
                     )
                 }
@@ -161,7 +161,7 @@ struct ProviderQuotaWidgetView: View {
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
-                        resetText: WidgetStyleHelper.compactResetText(resetAt: window.resetAt, from: entry.date),
+                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
                         compact: false
                     )
                 }
