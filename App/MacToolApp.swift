@@ -229,11 +229,19 @@ private struct ProviderStatusRow: View {
             if let snapshot = runtimeState?.snapshot {
                 if !snapshot.modelQuotas.isEmpty {
                     ForEach(snapshot.modelQuotas) { modelQuota in
-                        modelQuotaRow(modelQuota)
+                        quotaProgressRow(
+                            title: modelQuota.modelName,
+                            remainingPercentage: modelQuota.remainingPercentage,
+                            resetAt: modelQuota.resetAt
+                        )
                     }
                 } else {
                     ForEach(snapshot.quotaWindows) { window in
-                        windowProgressRow(window)
+                        quotaProgressRow(
+                            title: window.label,
+                            remainingPercentage: window.remainingPercentage,
+                            resetAt: window.resetAt
+                        )
                     }
                 }
             }
@@ -256,42 +264,19 @@ private struct ProviderStatusRow: View {
         }
     }
 
-    private func windowProgressRow(_ window: QuotaWindow) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func quotaProgressRow(title: String, remainingPercentage: Double, resetAt: Date?) -> some View {
+        let color = progressColor(forRemaining: remainingPercentage)
+        return VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(window.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(Int(window.usedPercentage.rounded()))%")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(progressColor(for: window.usedPercentage))
-                if let resetAt = window.resetAt, resetAt > Date() {
-                    Text("·")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Text(resetAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            ProgressView(value: window.usedPercentage, total: 100)
-                .tint(progressColor(for: window.usedPercentage))
-        }
-    }
-
-    private func modelQuotaRow(_ modelQuota: ModelQuota) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(modelQuota.modelName)
+                Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
-                Text("剩 \(Int(modelQuota.remainingPercentage.rounded()))%")
+                Text("剩 \(Int(remainingPercentage.rounded()))%")
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(progressColor(for: modelQuota.usedPercentage))
-                if let resetAt = modelQuota.resetAt, resetAt > Date() {
+                    .foregroundStyle(color)
+                if let resetAt, resetAt > Date() {
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -300,16 +285,16 @@ private struct ProviderStatusRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            ProgressView(value: modelQuota.remainingPercentage, total: 100)
-                .tint(progressColor(for: modelQuota.usedPercentage))
+            ProgressView(value: remainingPercentage, total: 100)
+                .tint(color)
         }
     }
 
-    private func progressColor(for usedPercentage: Double) -> Color {
-        if usedPercentage >= 95 {
+    private func progressColor(forRemaining remainingPercentage: Double) -> Color {
+        if remainingPercentage <= 5 {
             return .red
         }
-        if usedPercentage >= 80 {
+        if remainingPercentage <= 20 {
             return .orange
         }
         return .accentColor
