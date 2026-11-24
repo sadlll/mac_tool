@@ -176,7 +176,14 @@ struct ProviderQuotaWidgetView: View {
     }
 
     private func shortWindowTitle(_ window: QuotaWindow) -> String {
-        switch window.id {
+        let isCursorRing = entry.provider == .cursor && entry.style == .ring
+        return switch window.id {
+        case "monthly_total" where isCursorRing:
+            String(localized: "cursor")
+        case "monthly_api" where isCursorRing:
+            String(localized: "other")
+        case "grok_bot_weekly" where isCursorRing:
+            String(localized: "bot")
         case "session_5h":
             "5 小时"
         case "weekly":
