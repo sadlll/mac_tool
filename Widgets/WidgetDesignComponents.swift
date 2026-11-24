@@ -58,14 +58,6 @@ enum WidgetStyleHelper {
         return .blue
     }
 
-    /// 返回尚未结束的倒计时区间，供 WidgetKit 持续更新显示。
-    static func resetInterval(endingAt resetAt: Date?, from entryDate: Date) -> ClosedRange<Date>? {
-        guard let resetAt, resetAt > entryDate else {
-            return nil
-        }
-        return entryDate ... resetAt
-    }
-
     /// 将 Antigravity 较长的分桶名称拆分为简洁名称与窗口标签（如 `5h` / `周`），避免截断。
     static func splitBucketLabel(_ rawName: String) -> (name: String, badge: String?) {
         let parts = rawName.components(separatedBy: " · ")
@@ -120,36 +112,26 @@ struct WidgetPalette: DynamicProperty {
     }
 }
 
-/// 临近重置时使用 WidgetKit 倒计时，较远时显示本地重置时间。
+/// 临近重置时用固定时:分格式，较远时显示本地重置时间。
 struct WidgetResetCountdown: View {
     private let palette = WidgetPalette()
 
-    let interval: ClosedRange<Date>?
-    var stacked = false
+    let resetTime: WidgetResetSchedule.Display?
     var compactDate = false
 
     var body: some View {
-        if let interval {
-            let usesTimer = interval.upperBound.timeIntervalSince(interval.lowerBound) <= 3600
-
+        if let resetTime {
             Group {
-                if usesTimer, stacked {
+                switch resetTime {
+                case let .countdown(countdown):
+                    Text(countdown, format: WidgetResetSchedule.format)
+                case let .date(date) where compactDate:
                     VStack(spacing: 1) {
-                        Text("距重置")
-                        countdown(interval)
+                        Text(date, format: .dateTime.month(.defaultDigits).day())
+                        Text(date, format: .dateTime.hour().minute())
                     }
-                } else if usesTimer {
-                    HStack(spacing: 3) {
-                        Text("距重置")
-                        countdown(interval)
-                    }
-                } else if compactDate {
-                    VStack(spacing: 1) {
-                        Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day())
-                        Text(interval.upperBound, format: .dateTime.hour().minute())
-                    }
-                } else {
-                    Text(interval.upperBound, format: .dateTime.month(.defaultDigits).day().hour().minute())
+                case let .date(date):
+                    Text(date, format: .dateTime.month(.defaultDigits).day().hour().minute())
                 }
             }
             .font(.system(size: 10).monospacedDigit())
@@ -158,12 +140,6 @@ struct WidgetResetCountdown: View {
             .minimumScaleFactor(0.75)
             .accessibilityElement(children: .combine)
         }
-    }
-
-    private func countdown(_ interval: ClosedRange<Date>) -> some View {
-        Text(timerInterval: interval, pauseTime: interval.upperBound, showsHours: false)
-            .multilineTextAlignment(stacked ? .center : .leading)
-            .frame(width: 32, alignment: stacked ? .center : .leading)
     }
 }
 
@@ -203,7 +179,7 @@ struct QuotaRingMetricView: View {
     let title: String
     let badge: String?
     let remainingPercentage: Double
-    let resetInterval: ClosedRange<Date>?
+    let resetTime: WidgetResetSchedule.Display?
     let ringSize: CGFloat
     let lineWidth: CGFloat
     var compactDate = false
@@ -245,7 +221,7 @@ struct QuotaRingMetricView: View {
                 }
             }
 
-            WidgetResetCountdown(interval: resetInterval, stacked: true, compactDate: compactDate)
+            WidgetResetCountdown(resetTime: resetTime, compactDate: compactDate)
         }
         .frame(maxWidth: .infinity)
     }
@@ -257,7 +233,7 @@ struct CodexStyleBarMetricView: View {
 
     let title: String
     let remainingPercentage: Double
-    let resetInterval: ClosedRange<Date>?
+    let resetTime: WidgetResetSchedule.Display?
     let compact: Bool
 
     var body: some View {
@@ -294,7 +270,7 @@ struct CodexStyleBarMetricView: View {
 
             CapsuleProgressBar(fraction: clamped / 100.0, color: color, height: compact ? 5 : 6)
 
-            WidgetResetCountdown(interval: resetInterval)
+            WidgetResetCountdown(resetTime: resetTime)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

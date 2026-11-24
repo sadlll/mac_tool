@@ -8,6 +8,26 @@ struct ProviderQuotaEntry: TimelineEntry {
     let provider: ProviderID
     let snapshot: UsageSnapshot?
     let style: WidgetDisplayStyle
+    var timelineStart: Date?
+
+    func resetTime(endingAt resetAt: Date?) -> WidgetResetSchedule.Display? {
+        WidgetResetSchedule.display(endingAt: resetAt, at: date, timelineStart: timelineStart)
+    }
+
+    func showsReset(for window: QuotaWindow, in family: WidgetFamily, windowCount: Int) -> Bool {
+        !(style == .bar && family == .systemSmall && windowCount > 2 && window.id == "monthly_api")
+    }
+
+    func timeline(family: WidgetFamily) -> Timeline<Self> {
+        let windows = snapshot?.quotaWindows ?? []
+        let resetDates = windows.compactMap { window in
+            showsReset(for: window, in: family, windowCount: windows.count) ? window.resetAt : nil
+        }
+        let updates = WidgetResetSchedule.updates(after: date, resetDates: resetDates).map { update in
+            Self(date: update, provider: provider, snapshot: snapshot, style: style, timelineStart: date)
+        }
+        return Timeline(entries: [self] + updates, policy: .never)
+    }
 }
 
 /// Codex 小组件只读 TimelineProvider，仅从共享只读缓存读取数据。
@@ -32,7 +52,7 @@ struct CodexQuotaTimelineProvider: AppIntentTimelineProvider {
 
     func timeline(
         for configuration: CodexWidgetConfigurationIntent,
-        in _: Context
+        in context: Context
     ) async -> Timeline<ProviderQuotaEntry> {
         let entry = ProviderQuotaEntry(
             date: Date(),
@@ -40,7 +60,7 @@ struct CodexQuotaTimelineProvider: AppIntentTimelineProvider {
             snapshot: reader.snapshot(for: .codex),
             style: configuration.style
         )
-        return Timeline(entries: [entry], policy: .never)
+        return entry.timeline(family: context.family)
     }
 }
 
@@ -66,7 +86,7 @@ struct CursorQuotaTimelineProvider: AppIntentTimelineProvider {
 
     func timeline(
         for configuration: CursorWidgetConfigurationIntent,
-        in _: Context
+        in context: Context
     ) async -> Timeline<ProviderQuotaEntry> {
         let entry = ProviderQuotaEntry(
             date: Date(),
@@ -74,7 +94,7 @@ struct CursorQuotaTimelineProvider: AppIntentTimelineProvider {
             snapshot: reader.snapshot(for: .cursor),
             style: configuration.style
         )
-        return Timeline(entries: [entry], policy: .never)
+        return entry.timeline(family: context.family)
     }
 }
 
@@ -132,7 +152,7 @@ struct ProviderQuotaWidgetView: View {
                     title: shortWindowTitle(window),
                     badge: nil,
                     remainingPercentage: window.remainingPercentage,
-                    resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
+                    resetTime: entry.resetTime(endingAt: window.resetAt),
                     ringSize: compact ? 35 : (isSmall ? 50 : 64),
                     lineWidth: compact ? 4.5 : (isSmall ? 5.5 : 6.5),
                     compactDate: compact
@@ -149,11 +169,11 @@ struct ProviderQuotaWidgetView: View {
             VStack(alignment: .leading, spacing: compact ? 5 : 10) {
                 ForEach(windows) { window in
                     // 小号三行时只保留周额度与月度总用量各自的重置时间。
-                    let resetAt = compact && window.id == "monthly_api" ? nil : window.resetAt
+                    let showsReset = entry.showsReset(for: window, in: family, windowCount: windows.count)
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
-                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: resetAt, from: entry.date),
+                        resetTime: showsReset ? entry.resetTime(endingAt: window.resetAt) : nil,
                         compact: true
                     )
                 }
@@ -166,7 +186,7 @@ struct ProviderQuotaWidgetView: View {
                     CodexStyleBarMetricView(
                         title: shortWindowTitle(window),
                         remainingPercentage: window.remainingPercentage,
-                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: window.resetAt, from: entry.date),
+                        resetTime: entry.resetTime(endingAt: window.resetAt),
                         compact: false
                     )
                 }
