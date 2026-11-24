@@ -56,6 +56,11 @@ struct AntigravityQuotaEntry: TimelineEntry {
     let snapshot: UsageSnapshot?
     let style: WidgetDisplayStyle
     let selectedModelIDs: [String]
+    var timelineStart: Date?
+
+    func resetTime(endingAt resetAt: Date?) -> WidgetResetSchedule.Display? {
+        WidgetResetSchedule.display(endingAt: resetAt, at: date, timelineStart: timelineStart)
+    }
 
     func visibleModels(limit: Int) -> [ModelQuota] {
         let models = snapshot?.modelQuotas ?? []
@@ -113,7 +118,7 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
 
     func timeline(
         for configuration: SelectAntigravityModelsIntent,
-        in _: Context
+        in context: Context
     ) async -> Timeline<AntigravityQuotaEntry> {
         let entry = AntigravityQuotaEntry(
             date: Date(),
@@ -121,7 +126,22 @@ struct AntigravityQuotaTimelineProvider: AppIntentTimelineProvider {
             style: configuration.style,
             selectedModelIDs: configuration.selectedModels?.map(\.id) ?? []
         )
-        return Timeline(entries: [entry], policy: .never)
+        let isSmall = context.family == .systemSmall
+        if isSmall, entry.style == .bar {
+            return Timeline(entries: [entry], policy: .never)
+        }
+        let limit = isSmall ? 2 : 5
+        let resetDates = entry.visibleModels(limit: limit).compactMap(\.resetAt)
+        let updates = WidgetResetSchedule.updates(after: entry.date, resetDates: resetDates).map { date in
+            AntigravityQuotaEntry(
+                date: date,
+                snapshot: entry.snapshot,
+                style: entry.style,
+                selectedModelIDs: entry.selectedModelIDs,
+                timelineStart: entry.date
+            )
+        }
+        return Timeline(entries: [entry] + updates, policy: .never)
     }
 }
 
@@ -169,7 +189,7 @@ struct AntigravityQuotaWidgetView: View {
                         title: parts.name,
                         badge: parts.badge,
                         remainingPercentage: model.remainingPercentage,
-                        resetInterval: WidgetStyleHelper.resetInterval(endingAt: model.resetAt, from: entry.date),
+                        resetTime: entry.resetTime(endingAt: model.resetAt),
                         ringSize: isSmall ? 48 : 54,
                         lineWidth: isSmall ? 5 : 5.5
                     )
@@ -228,10 +248,7 @@ struct AntigravityQuotaWidgetView: View {
                 .font(.caption2.bold().monospacedDigit())
                 .foregroundStyle(palette.percentageStyle(for: model.remainingPercentage))
             if showReset {
-                WidgetResetCountdown(interval: WidgetStyleHelper.resetInterval(
-                    endingAt: model.resetAt,
-                    from: entry.date
-                ))
+                WidgetResetCountdown(resetTime: entry.resetTime(endingAt: model.resetAt))
             }
         }
     }

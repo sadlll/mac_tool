@@ -107,6 +107,7 @@ targets:
     platform: macOS
     sources:
       - App/Update/WidgetUpgradeRecovery.swift
+      - Widgets/WidgetResetSchedule.swift
       - Tests/WidgetUpgradeTests
     settings:
       base:
