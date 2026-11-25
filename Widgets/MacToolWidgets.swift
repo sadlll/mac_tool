@@ -10,6 +10,14 @@ struct ProviderQuotaEntry: TimelineEntry {
     let style: WidgetDisplayStyle
     var timelineStart: Date?
 
+    var visibleWindows: [QuotaWindow] {
+        let windows = snapshot?.quotaWindows ?? []
+        if provider == .cursor, style == .ring, snapshot?.planName == "Plus" {
+            return windows.filter { $0.id != "grok_bot_weekly" }
+        }
+        return windows
+    }
+
     func resetTime(endingAt resetAt: Date?) -> WidgetResetSchedule.Display? {
         WidgetResetSchedule.display(endingAt: resetAt, at: date, timelineStart: timelineStart)
     }
@@ -19,7 +27,7 @@ struct ProviderQuotaEntry: TimelineEntry {
     }
 
     func timeline(family: WidgetFamily) -> Timeline<Self> {
-        let windows = snapshot?.quotaWindows ?? []
+        let windows = visibleWindows
         let resetDates = windows.compactMap { window in
             showsReset(for: window, in: family, windowCount: windows.count) ? window.resetAt : nil
         }
@@ -127,7 +135,7 @@ struct ProviderQuotaWidgetView: View {
 
     @ViewBuilder
     private func contentBody(snapshot: UsageSnapshot) -> some View {
-        let windows = snapshot.quotaWindows
+        let windows = entry.visibleWindows
         if windows.isEmpty {
             Spacer()
             Text(snapshot.billingSummary ?? "暂无额度明细")
