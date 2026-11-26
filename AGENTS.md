@@ -224,3 +224,17 @@ git branch -d <分支名>
 6. 除 Sparkle 外不要引入第三方依赖；确实需要的话，在 PR 里说明理由
 7. 不要为了让测试通过而删掉测试或断言
 8. 敏感改动仍须在 PR 描述开头写明安全说明并加上 `security-review` 标签，CI 通过后由 AI 自动 squash 合并
+
+## Agent skills
+
+### Issue tracker
+
+本仓库通过 GitHub Issues（`sadlll/mac_tool`，使用 `gh` CLI）追踪需求、规格与任务。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+沿用 5 个默认 triage 标签（`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`）。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+采用单上下文（single-context）布局（根目录 `GLOSSARY.md` + `docs/adr/`）。详见 `docs/agents/domain.md`。
